@@ -29,11 +29,8 @@ const writeData = (fileName, data) => {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 };
 
-// ადმინების სია
-const registeredAdmins = [
-    { email: 'admin@gmail.com', password: 'admin' },
-    { email: 'grigoli@zarzma1.ge', password: 'password123' }
-];
+// 👑 სუპერ ლოგიკა: შენი პირადი მეილი, რომელიც გახდება ერთადერთი OWNER
+const OWNER_EMAIL = 'შენი_პირადი_ემაილი@gmail.com'; 
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'code-contest-platform', 'views'));
@@ -46,41 +43,111 @@ app.use(session({
     resave: false,
     saveUninitialized: true
 }));
-// 1. ადმინის რეგისტრაციის გვერდის ჩვენება (მხოლოდ სისტემაში მყოფი ადმინისთვის)
-app.get('/register-admin', (req, res) => {
-    // ვამოწმებთ, არის თუ არა მომხმარებელი ადმინი
-    if (!req.session || req.session.role !== 'admin') {
-        return res.status(403).send('წვდომა უარყოფილია: ამ გვერდზე შესვლა მხოლოდ ადმინისტრატორს შეუძლია!');
+
+// ==========================================
+// ⏱️ Middleware: ადმინების/Owner-ის აქტივობის სათვალთვალოდ
+// ==========================================
+app.use((req, res, next) => {
+    if (req.session && req.session.userEmail && (req.session.role === 'admin' || req.session.role === 'owner')) {
+        let admins = readData('admins.json', [
+            { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", lastActive: null },
+            { id: "2", username: "Grigoli", email: "grigoli@zarzma1.ge", password: "password123", lastActive: null }
+        ]);
+
+        let updated = false;
+        admins = admins.map(a => {
+            if (a.email === req.session.userEmail) {
+                a.lastActive = new Date().toISOString();
+                updated = true;
+            }
+            return a;
+        });
+
+        if (updated) {
+            writeData('admins.json', admins);
+        }
     }
-    res.render('register-admin'); 
+    next();
 });
 
-// 2. ახალი ადმინის მონაცემების მიღება და ბაზაში შენახვა
-app.post('/register-admin', async (req, res) => {
-    // უსაფრთხოების შემოწმება
-    if (!req.session || req.session.role !== 'admin') {
-        return res.status(403).send('მოქმედება უარყოფილია!');
+// ==========================================
+// 👑 ადმინების მართვა (Owner & Admin)
+// ==========================================
+
+// 1. ადმინების სიის და რეგისტრაციის გვერდის ჩვენება
+app.get('/register-admin', (req, res) => {
+    if (!req.session || (req.session.role !== 'admin' && req.session.role !== 'owner')) {
+        return res.status(403).send('წვდომა უარყოფილია: ამ გვერდზე შესვლა მხოლოდ ადმინისტრატორებს/მფლობელს შეუძლიათ!');
+    }
+
+    const admins = readData('admins.json', [
+        { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", lastActive: null },
+        { id: "2", username: "Grigoli", email: "grigoli@zarzma1.ge", password: "password123", lastActive: null }
+    ]);
+
+    const now = new Date();
+    const adminsWithStatus = admins.map(admin => {
+        let isOnline = false;
+        if (admin.lastActive) {
+            const diffMinutes = Math.abs(now - new Date(admin.lastActive)) / 1000 / 60;
+            if (diffMinutes < 5) isOnline = true; // აქტიურია თუ ბოლო 5 წუთში დაფიქსირდა მოქმედება
+        }
+        return {
+            id: admin.id,
+            username: admin.username,
+            email: admin.email,
+            isOnline: isOnline
+        };
+    });
+
+    res.render('register-admin', { 
+        admins: adminsWithStatus, 
+        currentRole: req.session.role 
+    }); 
+});
+
+// 2. ახალი ადმინის რეგისტრაცია (მხოლოდ OWNER-ს შეუძლია!)
+app.post('/register-admin', (req, res) => {
+    if (!req.session || req.session.role !== 'owner') {
+        return res.status(403).send('მოქმედება უარყოფილია: ადმინის დამატება შეუძლია მხოლოდ Owner-ს!');
     }
 
     const { username, password, email } = req.body;
+    const admins = readData('admins.json', []);
 
-    try {
-        // 📌 აქ ჩაიწერება მონაცემთა ბაზაში (users) შენახვა:
-        // აუცილებლად ვანიჭებთ როლს: 'admin'
-        await db.collection('users').insertOne({
-            username: username,
-            email: email,
-            password: password, // თუ პაროლების ჰეშვას (bcrypt) იყენებ, აქ ჰეში ჩაწერე!
-            role: 'admin'
-        });
-
-        // რეგისტრაციის შემდეგ მომხმარებელი ავტომატურად გადაგვყავს მთავარ გვერდზე
-        res.redirect('/contests');
-    } catch (error) {
-        console.error(error);
-        res.status(500).send('ბაზაში შენახვისას მოხდა შეცდომა!');
+    if (admins.some(a => a.email === email.trim())) {
+        return res.send('<script>alert("ეს ელ-ფოსტა უკვე გამოყენებულია!"); window.location="/register-admin";</script>');
     }
+
+    if (username && password && email) {
+        admins.push({
+            id: Date.now().toString(),
+            username: username.trim(),
+            email: email.trim(),
+            password: password.trim(),
+            lastActive: null
+        });
+        writeData('admins.json', admins);
+    }
+
+    res.redirect('/register-admin');
 });
+
+// 3. ადმინის წაშლა (მხოლოდ OWNER-ს შეუძლია!)
+app.post('/admin/delete-admin', (req, res) => {
+    if (!req.session || req.session.role !== 'owner') {
+        return res.status(403).send('მოქმედება უარყოფილია: ადმინის წაშლა შეუძლია მხოლოდ Owner-ს!');
+    }
+
+    const { adminId } = req.body;
+    let admins = readData('admins.json', []);
+
+    admins = admins.filter(a => a.id !== adminId);
+    writeData('admins.json', admins);
+
+    res.redirect('/register-admin');
+});
+
 // ==========================================
 // ავტორიზაცია (Login)
 // ==========================================
@@ -92,12 +159,23 @@ app.get('/', (req, res) => {
 app.post('/login', (req, res) => {
     const { email, password } = req.body;
     
-    // 1. ადმინის შემოწმება
-    const foundAdmin = registeredAdmins.find(a => a.email === email && a.password === password);
+    // 1. ადმინების/Owner-ის ფაილიდან წაკითხვა და შემოწმება
+    const admins = readData('admins.json', [
+        { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", lastActive: null },
+        { id: "2", username: "Grigoli", email: "grigoli@zarzma1.ge", password: "password123", lastActive: null }
+    ]);
+
+    const foundAdmin = admins.find(a => a.email === email.trim() && a.password === password);
     if (foundAdmin) {
         req.session.userId = `admin_${foundAdmin.email}`;
-        req.session.role = 'admin';
-        req.session.userEmail = email;
+        req.session.userEmail = foundAdmin.email;
+        
+        // 🔒 თუ შენი კონკრეტული მეილია, ანიჭებს OWNER როლს, სხვა შემთხვევაში ჩვეულებრივ ADMIN-ს
+        if (foundAdmin.email === OWNER_EMAIL) {
+            req.session.role = 'owner';
+        } else {
+            req.session.role = 'admin';
+        }
         return res.redirect('/contests');
     }
     
@@ -140,12 +218,12 @@ app.get('/contests', (req, res) => {
 // კონტესტების მართვა & კონფიგურაცია
 // ==========================================
 app.get('/admin/create-contest', (req, res) => {
-    if (req.session.role !== 'admin') return res.status(403).send('წვდომა უარყოფილია');
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
     res.render('create-contest');
 });
 
 app.post('/admin/create-contest', (req, res) => {
-    if (req.session.role !== 'admin') return res.status(403).send('წვდომა უარყოფილია');
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
     const { title, tasks, duration } = req.body;
     
     if (title && title.trim() !== "") {
@@ -168,18 +246,16 @@ app.post('/admin/create-contest', (req, res) => {
     res.redirect('/contests');
 });
 
-// კონფიგურაციის გვერდი
 app.get('/admin/configure-contest/:id', (req, res) => {
-    if (req.session.role !== 'admin') return res.status(403).send('წვდომა უარყოფილია');
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
     const contests = readData('contests.json');
     const contest = contests.find(c => c.id === req.params.id);
     if (!contest) return res.status(404).send('კონტესტი ვერ მოიძებნა');
     res.render('configure-contest', { contest });
 });
 
-// კონფიგურაციის შენახვა
 app.post('/admin/configure-contest/:id', (req, res) => {
-    if (req.session.role !== 'admin') return res.status(403).send('წვდომა უარყოფილია');
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
     const { duration, allowedUser, allowedPassword } = req.body;
     
     const contests = readData('contests.json');
@@ -195,7 +271,7 @@ app.post('/admin/configure-contest/:id', (req, res) => {
 });
 
 app.post('/admin/delete-contest', (req, res) => {
-    if (req.session.role !== 'admin') return res.status(403).send('წვდომა უარყოფილია');
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
     const { contestId } = req.body;
     
     let contests = readData('contests.json');
@@ -222,7 +298,6 @@ app.get('/contest/:id', (req, res) => {
     const currentTask = req.query.task || null;
     const viewType = req.query.view || 'statement';
     
-    // ტაიმერი
     const startTime = new Date(contest.createdAt);
     const endTime = new Date(startTime.getTime() + contest.duration * 60000);
     const timeLeft = Math.max(0, endTime - new Date());
@@ -240,7 +315,6 @@ app.get('/contest/:id', (req, res) => {
         submissions = allSubmissions.filter(s => s.contestId === contest.id && s.email === req.session.userEmail);
     }
 
-    // პირობების ძებნა (PDF ან MD)
     let taskStatementHtml = null;
     let pdfUrl = null;
 
@@ -265,7 +339,7 @@ app.get('/contest/:id', (req, res) => {
 });
 
 // ==========================================
-// CMS JUDGE - კოდის მიღება (Upsolving-ით + 50 ცდის ლიმიტით)
+// CMS JUDGE - კოდის მიღება
 // ==========================================
 app.post('/submit-code', upload.single('codeFile'), (req, res) => {
     if (!req.session.userId) return res.redirect('/');
@@ -274,15 +348,13 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
     const contests = readData('contests.json');
     const contest = contests.find(c => c.id === contestId);
     
-    // 1. ტაიმერის შემოწმება (დროის გასვლის მერე მხოლოდ checker და admin აბარებს!)
     const startTime = new Date(contest.createdAt);
     const endTime = new Date(startTime.getTime() + contest.duration * 60000);
     
-    if (new Date() > endTime && req.session.role !== 'checker' && req.session.role !== 'admin') {
+    if (new Date() > endTime && req.session.role !== 'checker' && req.session.role !== 'admin' && req.session.role !== 'owner') {
         return res.status(400).send('კონტესტის დრო ამოიწურა! გაგზავნა შეუძლიათ მხოლოდ Allowed იუზერებს (Upsolving).');
     }
 
-    // 2. ლიმიტის შემოწმება (50 ცდა)
     const allSubmissions = readData('submissions.json');
     const taskSubmissionsCount = allSubmissions.filter(s => 
         s.contestId === contestId && s.email === req.session.userEmail && s.taskName === taskName
@@ -331,7 +403,6 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
     if (fs.existsSync(userCodePath)) fs.unlinkSync(userCodePath);
     if (fs.existsSync(compiledExePath)) fs.unlinkSync(compiledExePath);
 
-    // დროის სრული ფორმატირება (წელი-თვე-დღე საათი:წუთი:წამი)
     const now = new Date();
     const formattedDate = now.toISOString().replace('T', ' ').substring(0, 19);
 
@@ -350,10 +421,10 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
 });
 
 // ==========================================
-// 📊 ადმინის სკორბორდი (ოლიმპიური სორტირებით)
+// 📊 ადმინის სკორბორდი
 // ==========================================
 app.get('/admin/scoreboard', (req, res) => {
-    if (req.session.role !== 'admin') return res.status(403).send('წვდომა უარყოფილია');
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
     
     const contestId = req.query.contestId;
     const contests = readData('contests.json');
@@ -408,7 +479,6 @@ app.get('/admin/scoreboard', (req, res) => {
             };
         });
 
-        // სორტირება: ჯერ ქულა (კლებადობით), მერე დრო (ზრდადობით)
         processedScoreboard.sort((a, b) => {
             if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
             return a.lastSubTime - b.lastSubTime;
@@ -422,13 +492,13 @@ app.get('/admin/scoreboard', (req, res) => {
 // სტუდენტების მართვა & წაშლა
 // ==========================================
 app.get('/admin/register-student', (req, res) => {
-    if (req.session.role !== 'admin') return res.status(403).send('წვდომა უარყოფილია');
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
     const students = readData('students.json', [{ email: 'student@gmail.com', password: '123' }]);
     res.render('register-student', { students, success: null });
 });
 
 app.post('/admin/register-student', (req, res) => {
-    if (req.session.role !== 'admin') return res.status(403).send('წვდომა უარყოფილია');
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
     const { email, password } = req.body;
     const students = readData('students.json', [{ email: 'student@gmail.com', password: '123' }]);
     if (students.some(s => s.email === email)) return res.render('register-student', { students, success: 'ეს მეილი გამოყენებულია!' });
@@ -437,7 +507,7 @@ app.post('/admin/register-student', (req, res) => {
 });
 
 app.post('/admin/unregister-student', (req, res) => {
-    if (req.session.role !== 'admin') return res.status(403).send('წვდომა უარყოფილია');
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
     let students = readData('students.json', [{ email: 'student@gmail.com', password: '123' }]);
     students = students.filter(s => s.id !== req.body.id && s._id !== req.body.id);
     writeData('students.json', students);
@@ -450,7 +520,7 @@ app.post('/admin/unregister-student', (req, res) => {
 app.get('/communication', (req, res) => {
     if (!req.session.userId) return res.redirect('/');
     const allQuestions = readData('questions.json');
-    const questions = req.session.role === 'admin' ? allQuestions : allQuestions.filter(q => q.user === req.session.userEmail);
+    const questions = (req.session.role === 'admin' || req.session.role === 'owner') ? allQuestions : allQuestions.filter(q => q.user === req.session.userEmail);
     res.render('communication', { questions, role: req.session.role });
 });
 
@@ -466,12 +536,13 @@ app.post('/ask-question', (req, res) => {
 });
 
 app.post('/admin/reply-question', (req, res) => {
-    if (req.session.role !== 'admin') return res.status(403).send('წვდომა უარყოფილია');
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
     const allQuestions = readData('questions.json');
     const question = allQuestions.find(q => q.id === req.body.qId || q._id === req.body.qId);
     if (question) { question.reply = req.body.replyText; writeData('questions.json', allQuestions); }
     res.redirect('/communication');
 });
+
 // სერვერის გაშვება
 const PORT = 3000;
 app.listen(PORT, () => {

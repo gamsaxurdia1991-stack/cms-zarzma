@@ -22,7 +22,7 @@
 
     <div class="container" style="max-width: 900px;">
         
-        <% if (role === 'admin') { %>
+        <% if (role === 'admin' || role === 'owner') { %>
             <div class="card card-body mb-4 border-0 shadow-sm bg-white p-3">
                 <h6 class="fw-bold text-muted small mb-3">ADMIN CONTROLS</h6>
                 <div class="d-flex gap-2 flex-wrap">
@@ -30,7 +30,7 @@
                     <a href="/admin/register-student" class="btn btn-dark btn-sm fw-bold px-3">👥 Manage Students</a>
                     <a href="/admin/scoreboard" class="btn btn-info text-white btn-sm fw-bold px-3">📊 Global Scoreboard</a>
                     <a href="/communication" class="btn btn-warning text-dark btn-sm fw-bold px-3">💬 Question Replies</a>
-                    <a href="/register-admin" class="btn text-white btn-sm fw-bold px-3" style="background-color: #6f42c1; border-color: #6f42c1;">👑 Add Admin</a>
+                    <a href="/register-admin" class="btn text-white btn-sm fw-bold px-3" style="background-color: #6f42c1; border-color: #6f42c1;">👑 Manage Admins</a>
                 </div>
             </div>
         <% } %>
@@ -52,7 +52,7 @@
                         <div class="d-flex align-items-center gap-2">
                             <a href="/contest/<%= contest.id %>" class="btn btn-outline-primary btn-sm fw-bold px-3">Enter Contest</a>
                             
-                            <% if (role === 'admin') { %>
+                            <% if (role === 'admin' || role === 'owner') { %>
                                 <a href="/admin/configure-contest/<%= contest.id %>" class="btn btn-warning btn-sm fw-bold py-1">🔧 Configure</a>
                                 
                                 <form action="/admin/delete-contest" method="POST" class="m-0" onsubmit="return confirm('ნამდვილად გსურთ წაშლა?');">
