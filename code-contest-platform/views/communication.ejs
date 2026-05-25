@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+    <meta charset="UTF-8">
+    <title>Communication</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light" style="padding-top: 40px; font-family: system-ui, sans-serif;">
+    <div class="container" style="max-width: 800px;">
+        <div class="card card-body shadow-sm border-0 p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                <h4 class="fw-bold m-0">Communication Panel</h4>
+                <a href="/contests" class="btn btn-outline-secondary btn-sm fw-bold">Back</a>
+            </div>
+
+            <% if (role !== 'admin') { %>
+                <form action="/ask-question" method="POST" class="mb-4 bg-light p-3 rounded border">
+                    <h6 class="fw-bold text-secondary mb-2">ASK A QUESTION</h6>
+                    <div class="mb-2"><input type="text" name="subject" class="form-control form-control-sm" placeholder="Subject / Task" required></div>
+                    <div class="mb-2"><textarea name="text" class="form-control form-control-sm" rows="2" placeholder="Your question..." required></textarea></div>
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Send</button>
+                </form>
+            <% } %>
+
+            <h5 class="text-secondary small fw-bold mb-3">QUESTIONS & ANSWERS</h5>
+            <div class="d-flex flex-column gap-3">
+                <% questions.reverse().forEach(q => { %>
+                    <div class="p-3 border rounded bg-white shadow-sm">
+                        <div class="d-flex justify-content-between small text-muted mb-1">
+                            <span><b>From:</b> <%= q.user %></span>
+                            <span><%= q.time %></span>
+                        </div>
+                        <h6 class="fw-bold text-dark mb-1">Subject: <%= q.subject %></h6>
+                        <p class="text-secondary small mb-2"><%= q.text %></p>
+                        
+                        <% if (q.reply) { %>
+                            <div class="p-2 bg-light border-start border-success border-3 small rounded">
+                                <b>📢 Admin Reply:</b> <span class="text-dark"><%= q.reply %></span>
+                            </div>
+                        <% } else if (role === 'admin') { %>
+                            <form action="/admin/reply-question" method="POST" class="row g-1 mt-2">
+                                <input type="hidden" name="qId" value="<%= q._id %>">
+                                <div class="col-md-9"><input type="text" name="replyText" class="form-control form-control-sm" placeholder="ჩაწერე პასუხი..." required></div>
+                                <div class="col-md-3"><button type="submit" class="btn btn-success btn-sm w-100 fw-bold">Reply</button></div>
+                            </form>
+                        <% } else { %>
+                            <div class="small text-muted italic">⌛ პასუხის მოლოდინში...</div>
+                        <% } %>
+                    </div>
+                <% }) %>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

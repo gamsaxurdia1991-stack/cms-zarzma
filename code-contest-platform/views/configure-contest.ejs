@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+    <meta charset="UTF-8">
+    <title>Configure Contest</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light py-5">
+    <div class="container" style="max-width: 600px;">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-dark text-white fw-bold">🔧 Contest Configuration: <%= contest.title %></div>
+            <div class="card-body p-4">
+                <form action="/admin/configure-contest/<%= contest.id %>" method="POST">
+                    
+                    <div class="mb-4">
+                        <label class="form-label fw-bold small text-secondary">CONTEST DURATION (MINUTES)</label>
+                        <input type="number" name="duration" class="form-control" value="<%= contest.duration %>" required min="1">
+                        <div class="form-text small text-muted">შეგიძლიათ ნებისმიერ დროს გაზარდოთ ან შეამციროთ კონტესტის დრო.</div>
+                    </div>
+
+                    <hr>
+
+                    <h6 class="fw-bold text-primary mt-3 mb-3">🔒 ALLOWED LIST (UPSOLVING CREDENTIALS)</h6>
+                    
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Allowed Username / Email</label>
+                        <input type="text" name="allowedUser" class="form-control" value="<%= contest.allowedUser || 'checker' %>" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Allowed Password</label>
+                        <input type="text" name="allowedPassword" class="form-control" value="<%= contest.allowedPassword || 'checker' %>" required>
+                    </div>
+                    
+                    <div class="alert alert-warning small border-0 p-2">
+                        💡 კონტესტის ძირითადი დროის ამოწურვის შემდეგ, ამ იუზერით შესული ხალხი მაინც შეძლებს ამოცანების თავისუფლად გატარებას!
+                    </div>
+
+                    <div class="d-flex gap-2 mt-4">
+                        <button type="submit" class="btn btn-success fw-bold flex-grow-1">Save Configuration</button>
+                        <a href="/contests" class="btn btn-secondary fw-bold px-4">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
