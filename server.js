@@ -29,8 +29,8 @@ const writeData = (fileName, data) => {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 };
 
-// 👑 სუპერ ლოგიკა: შენი პირადი მეილი, რომელიც გახდება ერთადერთი OWNER
-const OWNER_EMAIL = 'შენი_პირადი_ემაილი@gmail.com'; 
+// 👑 სუპერ ლოგიკა: შენი პირადი მეილი, რომელიც არის ერთადერთი OWNER
+const OWNER_EMAIL = 'grigoli@zarzma1.ge'; 
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'code-contest-platform', 'views'));
@@ -51,7 +51,7 @@ app.use((req, res, next) => {
     if (req.session && req.session.userEmail && (req.session.role === 'admin' || req.session.role === 'owner')) {
         let admins = readData('admins.json', [
             { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", lastActive: null },
-            { id: "2", username: "Grigoli", email: "grigoli@zarzma1.ge", password: "password123", lastActive: null }
+            { id: "2", username: "Grigoli", email: "grigoli@zarzma1.ge", password: "123qweasd", lastActive: null }
         ]);
 
         let updated = false;
@@ -82,7 +82,7 @@ app.get('/register-admin', (req, res) => {
 
     const admins = readData('admins.json', [
         { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", lastActive: null },
-        { id: "2", username: "Grigoli", email: "grigoli@zarzma1.ge", password: "password123", lastActive: null }
+        { id: "2", username: "Grigoli", email: "grigoli@zarzma1.ge", password: "123qweasd", lastActive: null }
     ]);
 
     const now = new Date();
@@ -162,7 +162,7 @@ app.post('/login', (req, res) => {
     // 1. ადმინების/Owner-ის ფაილიდან წაკითხვა და შემოწმება
     const admins = readData('admins.json', [
         { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", lastActive: null },
-        { id: "2", username: "Grigoli", email: "grigoli@zarzma1.ge", password: "password123", lastActive: null }
+        { id: "2", username: "Grigoli", email: "grigoli@zarzma1.ge", password: "123qweasd", lastActive: null }
     ]);
 
     const foundAdmin = admins.find(a => a.email === email.trim() && a.password === password);
