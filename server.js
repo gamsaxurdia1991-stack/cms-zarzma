@@ -439,7 +439,7 @@ app.post('/admin/reply-question', (req, res) => {
     res.redirect('/communication');
 });
 // სერვერის გაშვება
-const PORT = 80;
+const PORT = 3000;
 app.listen(PORT, () => {
     console.log(`🚀 სერვერი წარმატებით გადაეშვა სრულ რეჟიმში!`);
     console.log(`🔗 გახსენი ბრაუზერში: http://cms.zarzma1.ge:${PORT}`);
