@@ -57,18 +57,29 @@ app.get('/register-admin', (req, res) => {
 
 // 2. ახალი ადმინის მონაცემების მიღება და ბაზაში შენახვა
 app.post('/register-admin', async (req, res) => {
-    // აქაც ვამოწმებთ უსაფრთხოებას, რომ ვინმემ პირდაპირ პოსტ-მოთხოვნით არ დაარეგისტრიროს თავი
+    // უსაფრთხოების შემოწმება
     if (!req.session || req.session.role !== 'admin') {
         return res.status(403).send('მოქმედება უარყოფილია!');
     }
 
     const { username, password, email } = req.body;
 
-    // TODO: აქ ჩაწერე შენი მონაცემების შენახვის ლოგიკა (ისევე როგორც სტუდენტზე გაქვს)
-    // მნიშვნელოვანია, რომ ახალ ობიექტს მიანიჭო როლი:
-    // role: 'admin'
+    try {
+        // 📌 აქ ჩაიწერება მონაცემთა ბაზაში (users) შენახვა:
+        // აუცილებლად ვანიჭებთ როლს: 'admin'
+        await db.collection('users').insertOne({
+            username: username,
+            email: email,
+            password: password, // თუ პაროლების ჰეშვას (bcrypt) იყენებ, აქ ჰეში ჩაწერე!
+            role: 'admin'
+        });
 
-    res.send('ახალი ადმინისტრატორი წარმატებით დაემატა!');
+        // რეგისტრაციის შემდეგ მომხმარებელი ავტომატურად გადაგვყავს მთავარ გვერდზე
+        res.redirect('/contests');
+    } catch (error) {
+        console.error(error);
+        res.status(500).send('ბაზაში შენახვისას მოხდა შეცდომა!');
+    }
 });
 // ==========================================
 // ავტორიზაცია (Login)
