@@ -13,6 +13,12 @@
                 <a href="/contests" class="btn btn-outline-secondary btn-sm fw-bold">Back</a>
             </div>
 
+            <% if (success) { %>
+                <div class="alert alert-info alert-dismissible fade show small py-2 fw-bold" role="alert">
+                    <%= success %>
+                </div>
+            <% } %>
+
             <form action="/admin/register-student" method="POST" class="row g-2 mb-4">
                 <div class="col-md-5">
                     <input type="email" name="email" class="form-control form-control-sm" placeholder="Student Email" required autocomplete="off">
@@ -27,18 +33,23 @@
 
             <h5 class="text-secondary small fw-bold mb-3">CURRENT REGISTERED STUDENTS</h5>
             <div class="list-group">
-                <% students.forEach(s => { %>
-                    <div class="list-group-item d-flex justify-content-between align-items-center small py-2">
-                        <div>
-                            <span class="fw-bold text-dark">📧 <%= s.email %></span>
-                            <span class="text-muted ms-3">Password: <code><%= s.password %></code></span>
+                <% if (students && students.length > 0) { %>
+                    <% students.forEach(s => { %>
+                        <div class="list-group-item d-flex justify-content-between align-items-center small py-2">
+                            <div>
+                                <span class="fw-bold text-dark">📧 <%= s.email %></span>
+                                <span class="text-muted ms-3">Password: <code><%= s.password %></code></span>
+                            </div>
+                            
+                            <form action="/admin/unregister-student" method="POST" class="m-0" onsubmit="return confirm('ნამდვილად გსურთ მოსწავლის წაშლა?');">
+                                <input type="hidden" name="id" value="<%= s.id %>">
+                                <button type="submit" class="btn btn-danger btn-sm py-0 px-2 fw-bold" style="font-size: 11px;">Unregister</button>
+                            </form>
                         </div>
-                        <form action="/admin/unregister-student" method="POST" class="m-0" onsubmit="return confirm('ნამდვილად გსურთ მოსწავლის წაშლა?');">
-                            <input type="hidden" name="id" value="<%= s._id %>">
-                            <button type="submit" class="btn btn-danger btn-sm py-0 px-2 fw-bold" style="font-size: 11px;">Unregister</button>
-                        </form>
-                    </div>
-                <% }) %>
+                    <% }) %>
+                <% } else { %>
+                    <div class="text-muted text-center small py-3">დარეგისტრირებული სტუდენტები არ მოიძებნა.</div>
+                <% } %>
             </div>
         </div>
     </div>

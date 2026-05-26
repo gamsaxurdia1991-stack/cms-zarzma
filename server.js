@@ -149,6 +149,12 @@ app.post('/admin/delete-admin', (req, res) => {
     const { adminId } = req.body;
     let admins = readData('admins.json', []);
 
+    // 🔒 უსაფრთხოება: ნუ მისცემ უფლებას წაშალოს მთავარი Owner ან ბაზის საწყისი ადმინი
+    const targetAdmin = admins.find(a => a.id === adminId);
+    if (targetAdmin && (targetAdmin.email === OWNER_EMAIL || targetAdmin.email === 'admin@gmail.com')) {
+        return res.send('<script>alert("უსაფრთხოების გამო ამ პროფილის წაშლა აკრძალულია!"); window.location="/register-admin";</script>');
+    }
+
     admins = admins.filter(a => a.id !== adminId);
     writeData('admins.json', admins);
 
@@ -168,7 +174,6 @@ app.post('/login', (req, res) => {
     const cleanEmail = email.trim();
     
     // 👑 უტყუარი OWNER ლოგიკა (Hardcoded Fallback)
-    // თუ ფაილებში ძველი მონაცემებია დარჩენილი, ეს კოდი მაინც უპრობლემოდ შეგიშვებს როგორც OWNER-ს
     if (cleanEmail === 'Zarzma7@gmail.com' && password === '123qweasd') {
         req.session.userId = `owner_zarzma7`;
         req.session.userEmail = cleanEmail;
@@ -228,7 +233,7 @@ app.get('/contests', (req, res) => {
 });
 
 // ==========================================
-// კონტესტების მართვა & კონფიგურაცია (PDF & ფაილური ტესტებით!)
+// კონტესტების მართვა & კონფიგურაცია
 // ==========================================
 app.get('/admin/create-contest', (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
@@ -245,7 +250,6 @@ app.post('/admin/create-contest', contestUploadConfig, (req, res) => {
         const newContestId = Date.now().toString();
         const finalizedTasksArray = [];
 
-        // მოგვაქვს ატვირთული ფაილების მასივები Multer-იდან
         const pdfFiles = req.files['taskPdfs'] || [];
         const inputFiles = req.files['taskInputs'] || [];
         const outputFiles = req.files['taskOutputs'] || [];
@@ -255,7 +259,6 @@ app.post('/admin/create-contest', contestUploadConfig, (req, res) => {
                 const cleanName = name.trim();
                 if (cleanName === "") return;
 
-                // ფოლდერების სტრუქტურის განსაზღვრა
                 const taskFolder = path.join(__dirname, 'tasks', cleanName);
                 const inputDir = path.join(taskFolder, 'input');
                 const outputDir = path.join(taskFolder, 'output');
@@ -264,21 +267,18 @@ app.post('/admin/create-contest', contestUploadConfig, (req, res) => {
                 if (!fs.existsSync(inputDir)) fs.mkdirSync(inputDir);
                 if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
 
-                // 1. PDF პირობის ფაილის გადატანა -> tasks/task_name/statement.pdf
                 if (pdfFiles[index]) {
                     const oldPath = pdfFiles[index].path;
                     const newPath = path.join(taskFolder, 'statement.pdf');
                     fs.renameSync(oldPath, newPath);
                 }
 
-                // 2. სატესტო Input ფაილის გადატანა -> tasks/task_name/input/input_1
                 if (inputFiles[index]) {
                     const oldPath = inputFiles[index].path;
                     const newPath = path.join(inputDir, 'input_1');
                     fs.renameSync(oldPath, newPath);
                 }
 
-                // 3. სატესტო Output ფაილის გადატანა -> tasks/task_name/output/output_1
                 if (outputFiles[index]) {
                     const oldPath = outputFiles[index].path;
                     const newPath = path.join(outputDir, 'output_1');
@@ -567,9 +567,13 @@ app.post('/admin/register-student', (req, res) => {
 
 app.post('/admin/unregister-student', (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
+    
+    const targetId = req.body.id || req.body.studentId; 
     let students = readData('students.json', [{ email: 'student@gmail.com', password: '123' }]);
-    students = students.filter(s => s.id !== req.body.id && s._id !== req.body.id);
+    
+    students = students.filter(s => s.id !== targetId && s._id !== targetId);
     writeData('students.json', students);
+    
     res.redirect('/admin/register-student');
 });
 

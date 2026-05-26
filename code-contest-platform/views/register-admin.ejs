@@ -83,7 +83,7 @@
                                             <% if (currentRole === 'owner') { %>
                                                 <td class="text-center">
                                                     <form action="/admin/delete-admin" method="POST" class="m-0" onsubmit="return confirm('ნამდვილად გსურთ ამ ადმინისტრატორის წაშლა?');">
-                                                        <input type="hidden" name="adminId" value="<%= admin._id %>">
+                                                        <input type="hidden" name="adminId" value="<%= admin.id %>">
                                                         <button type="submit" class="btn btn-danger btn-sm fw-bold py-1 px-2" style="font-size: 11px;">
                                                             Delete
                                                         </button>
