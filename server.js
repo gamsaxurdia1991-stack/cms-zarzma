@@ -82,7 +82,7 @@ app.get('/register-admin', (req, res) => {
 
     const admins = readData('admins.json', [
         { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", lastActive: null },
-        { id: "2", username: "Grigoli", email: "grigoli@zarzma1.ge", password: "123qweasd", lastActive: null }
+        { id: "2", username: "Grigoli", email: "Grigoli", password: "123qweasd", lastActive: null }
     ]);
 
     const now = new Date();
