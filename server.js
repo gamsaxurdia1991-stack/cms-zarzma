@@ -37,7 +37,7 @@ const writeData = (fileName, data) => {
 };
 
 // 👑 სუპერ ლოგიკა: შენი პირადი მეილი, რომელიც არის ერთადერთი OWNER
-const OWNER_EMAIL = 'grigoli@zarzma1.ge'; 
+const OWNER_EMAIL = 'Zarzma7@gmail.com';
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'code-contest-platform', 'views'));
@@ -58,7 +58,7 @@ app.use((req, res, next) => {
     if (req.session && req.session.userEmail && (req.session.role === 'admin' || req.session.role === 'owner')) {
         let admins = readData('admins.json', [
             { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", lastActive: null },
-            { id: "2", username: "Grigoli", email: "grigoli@zarzma1.ge", password: "123qweasd", lastActive: null }
+            { id: "2", username: "Grigoli", email: "Zarzma7@gmail.com", password: "123qweasd", lastActive: null }
         ]);
 
         let updated = false;
