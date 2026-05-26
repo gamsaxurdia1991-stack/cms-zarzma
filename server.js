@@ -9,6 +9,13 @@ const { marked } = require('marked');
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
+// 📄 კონფიგურაცია მულტი-ფაილების მისაღებად (მაქსიმუმ 10 ამოცანა ერთ კონტესტში)
+const contestUploadConfig = upload.fields([
+    { name: 'taskPdfs', maxCount: 10 },
+    { name: 'taskInputs', maxCount: 10 },
+    { name: 'taskOutputs', maxCount: 10 }
+]);
+
 // ==========================================
 // 📂 JSON ბაზის ფუნქციები
 // ==========================================
@@ -82,7 +89,7 @@ app.get('/register-admin', (req, res) => {
 
     const admins = readData('admins.json', [
         { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", lastActive: null },
-        { id: "2", username: "Grigoli", email: "Grigoli", password: "123qweasd", lastActive: null }
+        { id: "2", username: "Grigoli", email: "Zarzma7@gmail.com", password: "123qweasd", lastActive: null }
     ]);
 
     const now = new Date();
@@ -90,7 +97,7 @@ app.get('/register-admin', (req, res) => {
         let isOnline = false;
         if (admin.lastActive) {
             const diffMinutes = Math.abs(now - new Date(admin.lastActive)) / 1000 / 60;
-            if (diffMinutes < 5) isOnline = true; // აქტიურია თუ ბოლო 5 წუთში დაფიქსირდა მოქმედება
+            if (diffMinutes < 5) isOnline = true;
         }
         return {
             id: admin.id,
@@ -159,7 +166,6 @@ app.get('/', (req, res) => {
 app.post('/login', (req, res) => {
     const { email, password } = req.body;
     
-    // 1. ადმინების/Owner-ის ფაილიდან წაკითხვა და შემოწმება
     const admins = readData('admins.json', [
         { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", lastActive: null },
         { id: "2", username: "Grigoli", email: "grigoli@zarzma1.ge", password: "123qweasd", lastActive: null }
@@ -170,7 +176,6 @@ app.post('/login', (req, res) => {
         req.session.userId = `admin_${foundAdmin.email}`;
         req.session.userEmail = foundAdmin.email;
         
-        // 🔒 თუ შენი კონკრეტული მეილია, ანიჭებს OWNER როლს, სხვა შემთხვევაში ჩვეულებრივ ADMIN-ს
         if (foundAdmin.email === OWNER_EMAIL) {
             req.session.role = 'owner';
         } else {
@@ -179,7 +184,6 @@ app.post('/login', (req, res) => {
         return res.redirect('/contests');
     }
     
-    // 2. Allowed List (Upsolving / Checker) შემოწმება
     const contests = readData('contests.json');
     const matchedContestForChecker = contests.find(c => c.allowedUser === email && c.allowedPassword === password);
     
@@ -190,7 +194,6 @@ app.post('/login', (req, res) => {
         return res.redirect('/contests');
     }
     
-    // 3. სტანდარტული მოსწავლის შემოწმება
     const students = readData('students.json', [{ email: 'student@gmail.com', password: '123' }]);
     const foundStudent = students.find(s => s.email === email && s.password === password);
     if (foundStudent) {
@@ -215,32 +218,78 @@ app.get('/contests', (req, res) => {
 });
 
 // ==========================================
-// კონტესტების მართვა & კონფიგურაცია
+// კონტესტების მართვა & კონფიგურაცია (PDF & ფაილური ტესტებით!)
 // ==========================================
 app.get('/admin/create-contest', (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
     res.render('create-contest');
 });
 
-app.post('/admin/create-contest', (req, res) => {
+app.post('/admin/create-contest', contestUploadConfig, (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
-    const { title, tasks, duration } = req.body;
+    
+    const { title, duration, taskNames } = req.body;
     
     if (title && title.trim() !== "") {
         const contests = readData('contests.json');
-        const tasksArray = tasks ? tasks.split(',').map(t => t.trim()).filter(t => t !== "") : [];
-        const newId = Date.now().toString();
+        const newContestId = Date.now().toString();
+        const finalizedTasksArray = [];
+
+        // მოგვაქვს ატვირთული ფაილების მასივები Multer-იდან
+        const pdfFiles = req.files['taskPdfs'] || [];
+        const inputFiles = req.files['taskInputs'] || [];
+        const outputFiles = req.files['taskOutputs'] || [];
+
+        if (taskNames && Array.isArray(taskNames)) {
+            taskNames.forEach((name, index) => {
+                const cleanName = name.trim();
+                if (cleanName === "") return;
+
+                // ფოლდერების სტრუქტურის განსაზღვრა
+                const taskFolder = path.join(__dirname, 'tasks', cleanName);
+                const inputDir = path.join(taskFolder, 'input');
+                const outputDir = path.join(taskFolder, 'output');
+
+                if (!fs.existsSync(taskFolder)) fs.mkdirSync(taskFolder, { recursive: true });
+                if (!fs.existsSync(inputDir)) fs.mkdirSync(inputDir);
+                if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+
+                // 1. PDF პირობის ფაილის გადატანა -> tasks/task_name/statement.pdf
+                if (pdfFiles[index]) {
+                    const oldPath = pdfFiles[index].path;
+                    const newPath = path.join(taskFolder, 'statement.pdf');
+                    fs.renameSync(oldPath, newPath);
+                }
+
+                // 2. სატესტო Input ფაილის გადატანა -> tasks/task_name/input/input_1
+                if (inputFiles[index]) {
+                    const oldPath = inputFiles[index].path;
+                    const newPath = path.join(inputDir, 'input_1');
+                    fs.renameSync(oldPath, newPath);
+                }
+
+                // 3. სატესტო Output ფაილის გადატანა -> tasks/task_name/output/output_1
+                if (outputFiles[index]) {
+                    const oldPath = outputFiles[index].path;
+                    const newPath = path.join(outputDir, 'output_1');
+                    fs.renameSync(oldPath, newPath);
+                }
+
+                finalizedTasksArray.push(cleanName);
+            });
+        }
         
         contests.push({
-            id: newId,
-            _id: newId,
+            id: newContestId,
+            _id: newContestId,
             title: title.trim(),
-            tasks: tasksArray,
+            tasks: finalizedTasksArray,
             duration: parseInt(duration) || 180,
             createdAt: new Date().toISOString(),
             allowedUser: 'checker',       
             allowedPassword: 'checker'    
         });
+        
         writeData('contests.json', contests);
     }
     res.redirect('/contests');
@@ -547,5 +596,5 @@ app.post('/admin/reply-question', (req, res) => {
 const PORT = 3000;
 app.listen(PORT, () => {
     console.log(`🚀 სერვერი წარმატებით გადაეშვა სრულ რეჟიმში!`);
-    console.log(`🔗 გახსენი ბრაუზერში: http://cms.zarzma1.ge:${PORT}`);
+    console.log(`🔗 გახსენი ბრაუზერში: http://localhost:${PORT}`);
 });
