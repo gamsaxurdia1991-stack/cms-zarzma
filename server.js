@@ -165,13 +165,23 @@ app.get('/', (req, res) => {
 
 app.post('/login', (req, res) => {
     const { email, password } = req.body;
+    const cleanEmail = email.trim();
+    
+    // 👑 უტყუარი OWNER ლოგიკა (Hardcoded Fallback)
+    // თუ ფაილებში ძველი მონაცემებია დარჩენილი, ეს კოდი მაინც უპრობლემოდ შეგიშვებს როგორც OWNER-ს
+    if (cleanEmail === 'Zarzma7@gmail.com' && password === '123qweasd') {
+        req.session.userId = `owner_zarzma7`;
+        req.session.userEmail = cleanEmail;
+        req.session.role = 'owner';
+        return res.redirect('/contests');
+    }
     
     const admins = readData('admins.json', [
         { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", lastActive: null },
-        { id: "2", username: "Grigoli", email: "grigoli@zarzma1.ge", password: "123qweasd", lastActive: null }
+        { id: "2", username: "Grigoli", email: "Zarzma7@gmail.com", password: "123qweasd", lastActive: null }
     ]);
 
-    const foundAdmin = admins.find(a => a.email === email.trim() && a.password === password);
+    const foundAdmin = admins.find(a => a.email === cleanEmail && a.password === password);
     if (foundAdmin) {
         req.session.userId = `admin_${foundAdmin.email}`;
         req.session.userEmail = foundAdmin.email;
@@ -185,21 +195,21 @@ app.post('/login', (req, res) => {
     }
     
     const contests = readData('contests.json');
-    const matchedContestForChecker = contests.find(c => c.allowedUser === email && c.allowedPassword === password);
+    const matchedContestForChecker = contests.find(c => c.allowedUser === cleanEmail && c.allowedPassword === password);
     
     if (matchedContestForChecker) {
-        req.session.userId = `checker_${email}_${Date.now()}`;
+        req.session.userId = `checker_${cleanEmail}_${Date.now()}`;
         req.session.role = 'checker';
-        req.session.userEmail = email;
+        req.session.userEmail = cleanEmail;
         return res.redirect('/contests');
     }
     
     const students = readData('students.json', [{ email: 'student@gmail.com', password: '123' }]);
-    const foundStudent = students.find(s => s.email === email && s.password === password);
+    const foundStudent = students.find(s => s.email === cleanEmail && s.password === password);
     if (foundStudent) {
         req.session.userId = `student_${foundStudent.email}`;
         req.session.role = 'student';
-        req.session.userEmail = email;
+        req.session.userEmail = cleanEmail;
         return res.redirect('/contests');
     }
     
@@ -470,7 +480,7 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
 });
 
 // ==========================================
-// 📊 ადმინის სკორბორდი
+// 📊  ადმინის სკორბორდი
 // ==========================================
 app.get('/admin/scoreboard', (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
