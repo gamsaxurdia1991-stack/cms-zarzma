@@ -9,7 +9,7 @@ const { marked } = require('marked');
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
-// 📄 კონფიგურაცია მულტი-ფაილების მისაღებად (ლიმიტი გაიზარდა 100-მდე ტესტებისთვის)
+// 📄 კონფიგურაცია მულტი-ფაილების მისაღებად (მაქსიმუმ 100 ტესტი ერთ ამოცანაში)
 const contestUploadConfig = upload.fields([
     { name: 'taskPdfs', maxCount: 10 },
     { name: 'taskInputs', maxCount: 100 },
@@ -81,6 +81,7 @@ app.use((req, res, next) => {
 // 👑 ადმინების მართვა (Owner & Admin)
 // ==========================================
 
+// 1. ადმინების სიის და რეგისტრაციის გვერდის ჩვენება
 app.get('/register-admin', (req, res) => {
     if (!req.session || (req.session.role !== 'admin' && req.session.role !== 'owner')) {
         return res.status(403).send('წვდომა უარყოფილია: ამ გვერდზე შესვლა მხოლოდ ადმინისტრატორებს/მფლობელს შეუძლიათ!');
@@ -112,6 +113,7 @@ app.get('/register-admin', (req, res) => {
     }); 
 });
 
+// 2. ახალი ადმინის რეგისტრაცია (მხოლოდ OWNER-ს შეუძლია!)
 app.post('/register-admin', (req, res) => {
     if (!req.session || req.session.role !== 'owner') {
         return res.status(403).send('მოქმედება უარყოფილია: ადმინის დამატება შეუძლია მხოლოდ Owner-ს!');
@@ -138,6 +140,7 @@ app.post('/register-admin', (req, res) => {
     res.redirect('/register-admin');
 });
 
+// 3. ადმინის წაშლა (მხოლოდ OWNER-ს შეუძლია!)
 app.post('/admin/delete-admin', (req, res) => {
     if (!req.session || req.session.role !== 'owner') {
         return res.status(403).send('მოქმედება უარყოფილია: ადმინის წაშლა შეუძლია მხოლოდ Owner-ს!');
@@ -146,6 +149,7 @@ app.post('/admin/delete-admin', (req, res) => {
     const { adminId } = req.body;
     let admins = readData('admins.json', []);
 
+    // 🔒 უსაფრთხოება: ნუ მისცემ უფლებას წაშალოს მთავარი Owner ან ბაზის საწყისი ადმინი
     const targetAdmin = admins.find(a => a.id === adminId);
     if (targetAdmin && (targetAdmin.email === OWNER_EMAIL || targetAdmin.email === 'admin@gmail.com')) {
         return res.send('<script>alert("უსაფრთხოების გამო ამ პროფილის წაშლა აკრძალულია!"); window.location="/register-admin";</script>');
@@ -169,6 +173,7 @@ app.post('/login', (req, res) => {
     const { email, password } = req.body;
     const cleanEmail = email.trim();
     
+    // 👑 უტყუარი OWNER ლოგიკა (Hardcoded Fallback)
     if (cleanEmail === 'Zarzma7@gmail.com' && password === '123qweasd') {
         req.session.userId = `owner_zarzma7`;
         req.session.userEmail = cleanEmail;
@@ -228,7 +233,7 @@ app.get('/contests', (req, res) => {
 });
 
 // ==========================================
-// კონტესტების მართვა & კონფიგურაცია (💡 განახლებული მულტი-ტესტებზე!)
+// კონტესტების მართვა & კონფიგურაცია
 // ==========================================
 app.get('/admin/create-contest', (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
@@ -238,7 +243,7 @@ app.get('/admin/create-contest', (req, res) => {
 app.post('/admin/create-contest', contestUploadConfig, (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
     
-    const { title, duration, taskNames } = req.body;
+    const { title, duration, taskNames, taskTimeLimits, taskMemoryLimits } = req.body;
     
     if (title && title.trim() !== "") {
         const contests = readData('contests.json');
@@ -248,6 +253,10 @@ app.post('/admin/create-contest', contestUploadConfig, (req, res) => {
         const pdfFiles = req.files['taskPdfs'] || [];
         const inputFiles = req.files['taskInputs'] || [];
         const outputFiles = req.files['taskOutputs'] || [];
+
+        // უზრუნველყოფა, რომ ლიმიტები მასივებია
+        const timeLimits = Array.isArray(taskTimeLimits) ? taskTimeLimits : [taskTimeLimits];
+        const memoryLimits = Array.isArray(taskMemoryLimits) ? taskMemoryLimits : [taskMemoryLimits];
 
         if (taskNames && Array.isArray(taskNames)) {
             taskNames.forEach((name, index) => {
@@ -262,45 +271,40 @@ app.post('/admin/create-contest', contestUploadConfig, (req, res) => {
                 if (!fs.existsSync(inputDir)) fs.mkdirSync(inputDir);
                 if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
 
-                // 1. PDF პირობის შენახვა
                 if (pdfFiles[index]) {
                     const oldPath = pdfFiles[index].path;
                     const newPath = path.join(taskFolder, 'statement.pdf');
                     fs.renameSync(oldPath, newPath);
                 }
 
-                // Helper ფუნქცია ფაილის სახელიდან ციფრის ამოსაღებად (მაგ: input5.txt -> 5)
+                // დამხმარე ფუნქცია ფაილის სახელიდან ციფრის ამოსაღებად
                 const getFileIndex = (originalName, fallbackIndex) => {
                     const match = originalName.match(/\d+/);
                     return match ? match[0] : fallbackIndex;
                 };
 
-                // 2. ყველა შესაბამისი INPUT ფაილის დამუშავება
+                // ყველა INPUT ფაილის გადატანა
                 inputFiles.forEach((file, fIdx) => {
-                    // ვამოწმებთ, ეს ფაილი ამ კონკრეტულ ამოცანას ეკუთვნის თუ არა (მულტერის წყობით)
-                    // მარტივი შემთხვევისთვის, თუ 1 ამოცანაა, ყველა ფაილი მასთან მიდის
                     const testNum = getFileIndex(file.originalname, fIdx + 1);
                     const oldPath = file.path;
                     const newPath = path.join(inputDir, `input_${testNum}`);
-                    
-                    // თუ ფაილი ჯერ კიდევ ფიზიკურად არსებობს დროებით საქაღალდეში
-                    if (fs.existsSync(oldPath)) {
-                        fs.renameSync(oldPath, newPath);
-                    }
+                    if (fs.existsSync(oldPath)) fs.renameSync(oldPath, newPath);
                 });
 
-                // 3. ყველა შესაბამისი OUTPUT ფაილის დამუშავება
+                // ყველა OUTPUT ფაილის გადატანა
                 outputFiles.forEach((file, fIdx) => {
                     const testNum = getFileIndex(file.originalname, fIdx + 1);
                     const oldPath = file.path;
                     const newPath = path.join(outputDir, `output_${testNum}`);
-                    
-                    if (fs.existsSync(oldPath)) {
-                        fs.renameSync(oldPath, newPath);
-                    }
+                    if (fs.existsSync(oldPath)) fs.renameSync(oldPath, newPath);
                 });
 
-                finalizedTasksArray.push(cleanName);
+                // ვინახავთ ამოცანის მონაცემებს
+                finalizedTasksArray.push({
+                    name: cleanName,
+                    timeLimit: parseFloat(timeLimits[index]) || 2.0,
+                    memoryLimit: parseInt(memoryLimits[index]) || 256
+                });
             });
         }
         
@@ -308,7 +312,8 @@ app.post('/admin/create-contest', contestUploadConfig, (req, res) => {
             id: newContestId,
             _id: newContestId,
             title: title.trim(),
-            tasks: finalizedTasksArray,
+            tasksData: finalizedTasksArray, // ინახავს ლიმიტებს
+            tasks: finalizedTasksArray.map(t => t.name), // ძველი თავსებადობისთვის
             duration: parseInt(duration) || 180,
             createdAt: new Date().toISOString(),
             allowedUser: 'checker',       
@@ -389,6 +394,22 @@ app.get('/contest/:id', (req, res) => {
         submissions = allSubmissions.filter(s => s.contestId === contest.id && s.email === req.session.userEmail);
     }
 
+    // 💡 გამოვთვალოთ დარჩენილი მცდელობები
+    let remainingSubmissions = 50;
+    if (currentTask) {
+        const currentTaskSubs = allSubmissions.filter(s => 
+            s.contestId === contest.id && s.email === req.session.userEmail && s.taskName === currentTask
+        ).length;
+        remainingSubmissions = Math.max(0, 50 - currentTaskSubs);
+    }
+
+    // 💡 წამოვიღოთ ამოცანის რეალური ლიმიტები ბაზიდან
+    let taskLimits = { timeLimit: 2.0, memoryLimit: 256 };
+    if (contest.tasksData && currentTask) {
+        const foundTask = contest.tasksData.find(t => t.name === currentTask);
+        if (foundTask) taskLimits = foundTask;
+    }
+
     let taskStatementHtml = null;
     let pdfUrl = null;
 
@@ -408,12 +429,14 @@ app.get('/contest/:id', (req, res) => {
     
     res.render('contest-view', {
         contest, currentTask, viewType, submissions, timeLeft, role: req.session.role,
-        taskStatementHtml, pdfUrl
+        taskStatementHtml, pdfUrl,
+        taskLimits,           // გადაეცემა ფრონტენდს 
+        remainingSubmissions  // გადაეცემა ფრონტენდს (50-ს აკლდება)
     });
 });
 
 // ==========================================
-// CMS JUDGE - კოდის მიღება და ტესტირება
+// CMS JUDGE - კოდის მიღება
 // ==========================================
 app.post('/submit-code', upload.single('codeFile'), (req, res) => {
     if (!req.session.userId) return res.redirect('/');
@@ -441,6 +464,13 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
     const file = req.file;
     if (!file) return res.status(400).send('ფაილი არ არის ატვირთული');
 
+    // 💡 განვსაზღვროთ დროის ლიმიტი დინამიურად
+    let executionTimeout = 2000; 
+    if (contest.tasksData) {
+        const foundTask = contest.tasksData.find(t => t.name === taskName);
+        if (foundTask) executionTimeout = (foundTask.timeLimit * 1000); 
+    }
+
     const userCodePath = file.path;
     const compiledExePath = path.join(__dirname, 'uploads', `${file.filename}.exe`);
     let totalPoints = 0;
@@ -463,22 +493,22 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
                     try {
                         const userOutput = execSync(`${compiledExePath}`, {
                             input: fs.readFileSync(path.join(inputDir, inFile)),
-                            timeout: 2000
+                            timeout: executionTimeout // იყენებს შენს შეყვანილ ლიმიტს
                         }).toString().trim();
                         const correctOutput = fs.readFileSync(path.join(outputDir, `output_${testId}`)).toString().trim();
-                        if (userOutput === correctOutput) {
-                            passedTests++;
-                        } else {
-                            status = `Wrong Answer on Test ${testId}`;
-                        }
+                        if (userOutput === correctOutput) passedTests++;
+                        else if (status === 'Accepted') status = `Wrong Answer on Test ${testId}`;
                     } catch { 
-                        status = `Runtime Error / TLE on Test ${testId}`; 
+                        if (status === 'Accepted') status = `TLE / Runtime Error on Test ${testId}`; 
                     }
                 }
             });
             if (inputFiles.length > 0) totalPoints = Math.round((passedTests / inputFiles.length) * 100);
         } else { totalPoints = 100; }
-    } catch { status = 'Compilation Error'; }
+    } catch (err) { 
+        status = 'Compilation Error'; 
+        console.error("G++ Error:", err.message);
+    }
 
     if (fs.existsSync(userCodePath)) fs.unlinkSync(userCodePath);
     if (fs.existsSync(compiledExePath)) fs.unlinkSync(compiledExePath);
@@ -501,7 +531,7 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
 });
 
 // ==========================================
-// 📊  ადმინის სკორბორდი
+// 📊   ადმინის სკორბორდი
 // ==========================================
 app.get('/admin/scoreboard', (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
