@@ -254,7 +254,7 @@ app.post('/admin/create-contest', contestUploadConfig, (req, res) => {
         const inputFiles = req.files['taskInputs'] || [];
         const outputFiles = req.files['taskOutputs'] || [];
 
-        // უზრუნველყოფა, რომ ლიმიტები მასივებია
+        // 🛠️ შესწორებულია: ლიმიტების გარანტირებული წაკითხვა მასივებიდან
         const timeLimits = Array.isArray(taskTimeLimits) ? taskTimeLimits : [taskTimeLimits];
         const memoryLimits = Array.isArray(taskMemoryLimits) ? taskMemoryLimits : [taskMemoryLimits];
 
@@ -277,13 +277,11 @@ app.post('/admin/create-contest', contestUploadConfig, (req, res) => {
                     fs.renameSync(oldPath, newPath);
                 }
 
-                // დამხმარე ფუნქცია ფაილის სახელიდან ციფრის ამოსაღებად
                 const getFileIndex = (originalName, fallbackIndex) => {
                     const match = originalName.match(/\d+/);
                     return match ? match[0] : fallbackIndex;
                 };
 
-                // ყველა INPUT ფაილის გადატანა
                 inputFiles.forEach((file, fIdx) => {
                     const testNum = getFileIndex(file.originalname, fIdx + 1);
                     const oldPath = file.path;
@@ -291,7 +289,6 @@ app.post('/admin/create-contest', contestUploadConfig, (req, res) => {
                     if (fs.existsSync(oldPath)) fs.renameSync(oldPath, newPath);
                 });
 
-                // ყველა OUTPUT ფაილის გადატანა
                 outputFiles.forEach((file, fIdx) => {
                     const testNum = getFileIndex(file.originalname, fIdx + 1);
                     const oldPath = file.path;
@@ -299,7 +296,7 @@ app.post('/admin/create-contest', contestUploadConfig, (req, res) => {
                     if (fs.existsSync(oldPath)) fs.renameSync(oldPath, newPath);
                 });
 
-                // ვინახავთ ამოცანის მონაცემებს
+                // 🛠️ შესწორებულია: ინდექსით სწორად ამოღება შესაბამისი ამოცანისთვის
                 finalizedTasksArray.push({
                     name: cleanName,
                     timeLimit: parseFloat(timeLimits[index]) || 2.0,
@@ -312,8 +309,8 @@ app.post('/admin/create-contest', contestUploadConfig, (req, res) => {
             id: newContestId,
             _id: newContestId,
             title: title.trim(),
-            tasksData: finalizedTasksArray, // ინახავს ლიმიტებს
-            tasks: finalizedTasksArray.map(t => t.name), // ძველი თავსებადობისთვის
+            tasksData: finalizedTasksArray, 
+            tasks: finalizedTasksArray.map(t => t.name), 
             duration: parseInt(duration) || 180,
             createdAt: new Date().toISOString(),
             allowedUser: 'checker',       
@@ -328,7 +325,7 @@ app.post('/admin/create-contest', contestUploadConfig, (req, res) => {
 app.get('/admin/configure-contest/:id', (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
     const contests = readData('contests.json');
-    const contest = contests.find(c => c.id === req.params.id);
+    const contest = contests.find(c => String(c.id) === String(req.params.id));
     if (!contest) return res.status(404).send('კონტესტი ვერ მოიძებნა');
     res.render('configure-contest', { contest });
 });
@@ -338,7 +335,7 @@ app.post('/admin/configure-contest/:id', (req, res) => {
     const { duration, allowedUser, allowedPassword } = req.body;
     
     const contests = readData('contests.json');
-    const contest = contests.find(c => c.id === req.params.id);
+    const contest = contests.find(c => String(c.id) === String(req.params.id));
     
     if (contest) {
         contest.duration = parseInt(duration) || 180;
@@ -354,11 +351,11 @@ app.post('/admin/delete-contest', (req, res) => {
     const { contestId } = req.body;
     
     let contests = readData('contests.json');
-    contests = contests.filter(c => c.id !== contestId && c._id !== contestId);
+    contests = contests.filter(c => String(c.id) !== String(contestId) && String(c._id) !== String(contestId));
     writeData('contests.json', contests);
     
     let allSubmissions = readData('submissions.json');
-    allSubmissions = allSubmissions.filter(s => s.contestId !== contestId);
+    allSubmissions = allSubmissions.filter(s => String(s.contestId) !== String(contestId));
     writeData('submissions.json', allSubmissions);
     
     res.redirect('/contests');
@@ -371,7 +368,7 @@ app.get('/contest/:id', (req, res) => {
     if (!req.session.userId) return res.redirect('/');
     
     const contests = readData('contests.json');
-    const contest = contests.find(c => c.id === req.params.id || c._id === req.params.id);
+    const contest = contests.find(c => String(c.id) === String(req.params.id) || String(c._id) === String(req.params.id));
     if (!contest) return res.status(404).send('კონტესტი ვერ მოიძებნა');
     
     const currentTask = req.query.task || null;
@@ -384,26 +381,26 @@ app.get('/contest/:id', (req, res) => {
     const allSubmissions = readData('submissions.json');
     let submissions = [];
     
+    // 🛠️ შესწორებულია: უსაფრთხო String შედარება ტიპების აცდენის თავიდან ასაცილებლად
     if (currentTask) {
         if (viewType === 'submissions') {
-            submissions = allSubmissions.filter(s => s.contestId === contest.id && s.email === req.session.userEmail && s.taskName === currentTask);
+            submissions = allSubmissions.filter(s => String(s.contestId) === String(contest.id) && s.email === req.session.userEmail && s.taskName === currentTask);
         } else if (viewType === 'all-submissions') {
-            submissions = allSubmissions.filter(s => s.contestId === contest.id && s.email === req.session.userEmail);
+            submissions = allSubmissions.filter(s => String(s.contestId) === String(contest.id) && s.email === req.session.userEmail);
         }
     } else if (viewType === 'all-submissions') {
-        submissions = allSubmissions.filter(s => s.contestId === contest.id && s.email === req.session.userEmail);
+        submissions = allSubmissions.filter(s => String(s.contestId) === String(contest.id) && s.email === req.session.userEmail);
     }
 
-    // 💡 გამოვთვალოთ დარჩენილი მცდელობები
+    // 🛠️ შესწორებულია: მცდელობების სწორი გამოკლება და თვლა სტრინგ შედარებით
     let remainingSubmissions = 50;
     if (currentTask) {
         const currentTaskSubs = allSubmissions.filter(s => 
-            s.contestId === contest.id && s.email === req.session.userEmail && s.taskName === currentTask
+            String(s.contestId) === String(contest.id) && s.email === req.session.userEmail && s.taskName === currentTask
         ).length;
         remainingSubmissions = Math.max(0, 50 - currentTaskSubs);
     }
 
-    // 💡 წამოვიღოთ ამოცანის რეალური ლიმიტები ბაზიდან
     let taskLimits = { timeLimit: 2.0, memoryLimit: 256 };
     if (contest.tasksData && currentTask) {
         const foundTask = contest.tasksData.find(t => t.name === currentTask);
@@ -429,21 +426,19 @@ app.get('/contest/:id', (req, res) => {
     
     res.render('contest-view', {
         contest, currentTask, viewType, submissions, timeLeft, role: req.session.role,
-        taskStatementHtml, pdfUrl,
-        taskLimits,           // გადაეცემა ფრონტენდს 
-        remainingSubmissions  // გადაეცემა ფრონტენდს (50-ს აკლდება)
+        taskStatementHtml, pdfUrl, taskLimits, remainingSubmissions
     });
 });
 
 // ==========================================
-// CMS JUDGE - კოდის მიღება
+// CMS JUDGE - კოდის მიღება და ტესტირება
 // ==========================================
 app.post('/submit-code', upload.single('codeFile'), (req, res) => {
     if (!req.session.userId) return res.redirect('/');
     
     const { contestId, taskName } = req.body;
     const contests = readData('contests.json');
-    const contest = contests.find(c => c.id === contestId);
+    const contest = contests.find(c => String(c.id) === String(contestId));
     
     const startTime = new Date(contest.createdAt);
     const endTime = new Date(startTime.getTime() + contest.duration * 60000);
@@ -454,7 +449,7 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
 
     const allSubmissions = readData('submissions.json');
     const taskSubmissionsCount = allSubmissions.filter(s => 
-        s.contestId === contestId && s.email === req.session.userEmail && s.taskName === taskName
+        String(s.contestId) === String(contestId) && s.email === req.session.userEmail && s.taskName === taskName
     ).length;
 
     if (taskSubmissionsCount >= 50) {
@@ -464,50 +459,76 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
     const file = req.file;
     if (!file) return res.status(400).send('ფაილი არ არის ატვირთული');
 
-    // 💡 განვსაზღვროთ დროის ლიმიტი დინამიურად
     let executionTimeout = 2000; 
-    if (contest.tasksData) {
+    if (contest && contest.tasksData) {
         const foundTask = contest.tasksData.find(t => t.name === taskName);
-        if (foundTask) executionTimeout = (foundTask.timeLimit * 1000); 
+        if (foundTask) executionTimeout = Math.round(foundTask.timeLimit * 1000); 
     }
 
     const userCodePath = file.path;
     const compiledExePath = path.join(__dirname, 'uploads', `${file.filename}.exe`);
     let totalPoints = 0;
     let status = 'Accepted';
+    let compiledSuccessfully = false;
 
+    // 🛠️ შესწორებულია: კომპილაციის ბლოკი ოპტიმიზაციით (-O3) და უსაფრთხოებით
     try {
-        execSync(`g++ ${userCodePath} -o ${compiledExePath}`);
+        execSync(`g++ -O3 "${userCodePath}" -o "${compiledExePath}"`);
+        compiledSuccessfully = true;
+    } catch (err) { 
+        status = 'Compilation Error'; 
+        console.error("G++ Error:", err.message);
+    }
+
+    // 🛠️ შესწორებულია: ტესტების მყარი გაშვების ბლოკი, რომელიც სუფთა Regex-ით ეძებს ციფრს სახელში
+    if (compiledSuccessfully) {
         const taskFolder = path.join(__dirname, 'tasks', taskName);
         const inputDir = path.join(taskFolder, 'input');
         const outputDir = path.join(taskFolder, 'output');
 
         if (fs.existsSync(inputDir) && fs.existsSync(outputDir)) {
-            const inputFiles = fs.readdirSync(inputDir);
+            const inputFiles = fs.readdirSync(inputDir).sort((a, b) => {
+                const numA = parseInt(a.match(/\d+/)?.[0] || 0);
+                const numB = parseInt(b.match(/\d+/)?.[0] || 0);
+                return numA - numB;
+            });
+            
             let passedTests = 0;
 
             inputFiles.forEach(inFile => {
-                const parts = inFile.split('_');
-                if (parts.length > 1) {
-                    const testId = parts[1];
+                const match = inFile.match(/\d+/);
+                if (match) {
+                    const testId = match[0];
                     try {
-                        const userOutput = execSync(`${compiledExePath}`, {
+                        // გაშვება ოპტიმიზებული ბუფერით და ლიმიტებით
+                        const userOutput = execSync(`"${compiledExePath}"`, {
                             input: fs.readFileSync(path.join(inputDir, inFile)),
-                            timeout: executionTimeout // იყენებს შენს შეყვანილ ლიმიტს
+                            timeout: executionTimeout,
+                            maxBuffer: 1024 * 1024 * 10 // 10MB
                         }).toString().trim();
-                        const correctOutput = fs.readFileSync(path.join(outputDir, `output_${testId}`)).toString().trim();
-                        if (userOutput === correctOutput) passedTests++;
-                        else if (status === 'Accepted') status = `Wrong Answer on Test ${testId}`;
-                    } catch { 
-                        if (status === 'Accepted') status = `TLE / Runtime Error on Test ${testId}`; 
+                        
+                        const outPath = path.join(outputDir, `output_${testId}`);
+                        if (fs.existsSync(outPath)) {
+                            const correctOutput = fs.readFileSync(outPath).toString().trim();
+                            if (userOutput === correctOutput) {
+                                passedTests++;
+                            } else if (status === 'Accepted') {
+                                status = `Wrong Answer on Test ${testId}`;
+                            }
+                        }
+                    } catch (execErr) { 
+                        if (status === 'Accepted') {
+                            if (execErr.code === 'ETIMEDOUT') {
+                                status = `Time Limit Exceeded on Test ${testId}`;
+                            } else {
+                                status = `Runtime Error on Test ${testId}`;
+                            }
+                        }
                     }
                 }
             });
             if (inputFiles.length > 0) totalPoints = Math.round((passedTests / inputFiles.length) * 100);
         } else { totalPoints = 100; }
-    } catch (err) { 
-        status = 'Compilation Error'; 
-        console.error("G++ Error:", err.message);
     }
 
     if (fs.existsSync(userCodePath)) fs.unlinkSync(userCodePath);
@@ -518,7 +539,7 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
 
     allSubmissions.push({
         id: Date.now().toString(),
-        contestId,
+        contestId: String(contestId), // მყარად String ფორმატში
         email: req.session.userEmail,
         taskName,
         points: totalPoints,
@@ -538,13 +559,13 @@ app.get('/admin/scoreboard', (req, res) => {
     
     const contestId = req.query.contestId;
     const contests = readData('contests.json');
-    let selectedContest = contests.find(c => c.id === contestId) || null;
+    let selectedContest = contests.find(c => String(c.id) === String(contestId)) || null;
     
     let processedScoreboard = [];
 
     if (selectedContest) {
         const allSubmissions = readData('submissions.json');
-        const contestSubmissions = allSubmissions.filter(s => s.contestId === contestId);
+        const contestSubmissions = allSubmissions.filter(s => String(s.contestId) === String(contestId));
 
         const userMap = {};
 
@@ -555,11 +576,7 @@ app.get('/admin/scoreboard', (req, res) => {
             const subTime = new Date(sub.time);
 
             if (!userMap[email]) {
-                userMap[email] = {
-                    email: email,
-                    tasks: {},
-                    totalPoints: 0
-                };
+                userMap[email] = { email: email, tasks: {}, totalPoints: 0 };
             }
 
             if (!userMap[email].tasks[task] || points > userMap[email].tasks[task].points) {
@@ -613,18 +630,15 @@ app.post('/admin/register-student', (req, res) => {
     const students = readData('students.json', [{ email: 'student@gmail.com', password: '123' }]);
     if (students.some(s => s.email === email)) return res.render('register-student', { students, success: 'ეს მეილი გამოყენებულია!' });
     if (email && password) { students.push({ id: Date.now().toString(), email: email.trim(), password: password.trim() }); writeData('students.json', students); }
-    res.render('register-student', { students, success: 'მოსწავლე დარეგისტრირდა!' });
+    res.redirect('/admin/register-student');
 });
 
 app.post('/admin/unregister-student', (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
-    
     const targetId = req.body.id || req.body.studentId; 
     let students = readData('students.json', [{ email: 'student@gmail.com', password: '123' }]);
-    
-    students = students.filter(s => s.id !== targetId && s._id !== targetId);
+    students = students.filter(s => String(s.id) !== String(targetId) && String(s._id) !== String(targetId));
     writeData('students.json', students);
-    
     res.redirect('/admin/register-student');
 });
 
@@ -652,7 +666,7 @@ app.post('/ask-question', (req, res) => {
 app.post('/admin/reply-question', (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
     const allQuestions = readData('questions.json');
-    const question = allQuestions.find(q => q.id === req.body.qId || q._id === req.body.qId);
+    const question = allQuestions.find(q => String(q.id) === String(req.body.qId) || String(q._id) === String(req.body.qId));
     if (question) { question.reply = req.body.replyText; writeData('questions.json', allQuestions); }
     res.redirect('/communication');
 });
