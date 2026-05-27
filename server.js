@@ -57,8 +57,8 @@ app.use(session({
 app.use((req, res, next) => {
     if (req.session && req.session.userEmail && (req.session.role === 'admin' || req.session.role === 'owner')) {
         let admins = readData('admins.json', [
-            { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", lastActive: null },
-            { id: "2", username: "Grigoli", email: "Zarzma7@gmail.com", password: "123qweasd", lastActive: null }
+            { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", role: "admin", lastActive: null },
+            { id: "2", username: "Grigoli", email: "Zarzma7@gmail.com", password: "123qweasd", role: "owner", lastActive: null }
         ]);
 
         let updated = false;
@@ -86,8 +86,8 @@ app.get('/register-admin', (req, res) => {
     }
 
     const admins = readData('admins.json', [
-        { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", lastActive: null },
-        { id: "2", username: "Grigoli", email: "Zarzma7@gmail.com", password: "123qweasd", lastActive: null }
+        { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", role: "admin", lastActive: null },
+        { id: "2", username: "Grigoli", email: "Zarzma7@gmail.com", password: "123qweasd", role: "owner", lastActive: null }
     ]);
 
     const now = new Date();
@@ -101,6 +101,7 @@ app.get('/register-admin', (req, res) => {
             id: admin.id,
             username: admin.username,
             email: admin.email,
+            role: admin.role || 'admin',
             isOnline: isOnline
         };
     });
@@ -129,6 +130,7 @@ app.post('/register-admin', (req, res) => {
             username: username.trim(),
             email: email.trim(),
             password: password.trim(),
+            role: 'admin', // ფიქსი: ენიჭება 'admin' როლი
             lastActive: null
         });
         writeData('admins.json', admins);
@@ -176,8 +178,8 @@ app.post('/login', (req, res) => {
     }
     
     const admins = readData('admins.json', [
-        { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", lastActive: null },
-        { id: "2", username: "Grigoli", email: "Zarzma7@gmail.com", password: "123qweasd", lastActive: null }
+        { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", role: "admin", lastActive: null },
+        { id: "2", username: "Grigoli", email: "Zarzma7@gmail.com", password: "123qweasd", role: "owner", lastActive: null }
     ]);
 
     const foundAdmin = admins.find(a => a.email === cleanEmail && a.password === password);
@@ -185,12 +187,12 @@ app.post('/login', (req, res) => {
         req.session.userId = `admin_${foundAdmin.email}`;
         req.session.userEmail = foundAdmin.email;
         
-        if (foundAdmin.email === OWNER_EMAIL) {
+        if (foundAdmin.email === OWNER_EMAIL || foundAdmin.role === 'owner') {
             req.session.role = 'owner';
         } else {
             req.session.role = 'admin';
         }
-        return res.redirect('/contests');
+        return res.redirect('/contests'); // ფიქსი: კოდი აქ გაჩერდება და სესია წარმატებით შეიქმნება
     }
     
     const contests = readData('contests.json');
