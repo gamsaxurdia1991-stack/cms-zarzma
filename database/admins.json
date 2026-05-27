@@ -1,0 +1,16 @@
+[
+  {
+    "id": "1",
+    "username": "Admin",
+    "email": "admin@gmail.com",
+    "password": "admin",
+    "lastActive": "2026-05-27T17:07:13.331Z"
+  },
+  {
+    "id": "2",
+    "username": "Grigoli",
+    "email": "Zarzma7@gmail.com",
+    "password": "123qweasd",
+    "lastActive": null
+  }
+]

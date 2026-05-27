@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title><%= (contest && contest.title) ? contest.title : 'Contest' %></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <style>
         body { font-family: system-ui, sans-serif; display: flex; height: 100vh; overflow: hidden; margin:0; background-color: #f8f9fa; }
         
@@ -14,17 +15,26 @@
         .sidebar-menu a.active { background-color: #e7f1ff; color: #0d6efd; font-weight: 600; border-right: 3px solid #0d6efd; }
         
         /* Content Area Styling */
-        .content-area { flex: 1; padding: 40px; overflow-y: auto; background-color: #fdfdfd; }
+        .content-area { flex: 1; padding: 40px; overflow-y: auto; background-color: #ffffff; }
         
         /* Components */
         .task-header { font-size: 11px; font-weight: 800; color: #adb5bd; padding: 15px 20px 5px 20px; text-transform: uppercase; letter-spacing: 0.5px; }
         .timer-badge { font-size: 18px; font-weight: 700; background: #212529; color: #ffc107; padding: 10px; border-radius: 6px; text-align: center; margin: 0 15px 20px 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-family: monospace; }
-        .statement-container { background: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
+        
+        /* CMS Styled Details Table */
+        .cms-table { max-width: 800px; width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 30px; font-size: 15px; }
+        .cms-table td { padding: 8px 12px; border: 1px solid #dee2e6; }
+        .cms-table td:first-child { font-weight: bold; width: 200px; background-color: #fcfcfc; }
         
         /* Markdown / Text Formatting */
         .statement-box img { max-width: 100%; height: auto; border-radius: 4px; }
         .statement-box pre { background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef; font-family: 'Courier New', Courier, monospace; }
         .limit-badge { font-size: 12px; padding: 4px 10px; background: #f1f3f5; color: #495057; border-radius: 4px; border: 1px solid #dee2e6; font-weight: 600; }
+        
+        /* CMS Status Text Colors */
+        .status-text { font-weight: bold; }
+        .status-ac { color: #2ca02c; } /* მწვანე */
+        .status-err { color: #cd3d4d; } /* CMS წითელი */
     </style>
 </head>
 <body>
@@ -43,7 +53,7 @@
             <a href="/contest/<%= contest.id %>?view=all-submissions" class="<%= viewType === 'all-submissions' ? 'active' : '' %>">
                 📝 My Submissions
             </a>
-            <a href="/communication">
+            <a href="/communication?contestId=<%= contest.id %>">
                 💬 Communication
             </a>
             
@@ -51,10 +61,10 @@
             
             <% contest.tasks.forEach(task => { %>
                 <div class="task-header"><%= task %></div>
-                <a href="/contest/<%= contest.id %>?task=<%= task %>&view=statement" class="ps-4 <%= currentTask === task && viewType === 'statement' ? 'active' : '' %>">
+                <a href="/contest/<%= contest.id %>?task=<%= encodeURIComponent(task) %>&view=statement" class="ps-4 <%= currentTask === task && viewType === 'statement' ? 'active' : '' %>">
                     📄 Statement
                 </a>
-                <a href="/contest/<%= contest.id %>?task=<%= task %>&view=submissions" class="ps-4 <%= currentTask === task && viewType === 'submissions' ? 'active' : '' %>">
+                <a href="/contest/<%= contest.id %>?task=<%= encodeURIComponent(task) %>&view=submissions" class="ps-4 <%= currentTask === task && viewType === 'submissions' ? 'active' : '' %>">
                     📊 Submissions
                 </a>
             <% }) %>
@@ -82,9 +92,10 @@
                                     <td class="text-muted small fw-bold"><%= s.time %></td>
                                     <td class="fw-bold"><%= s.taskName %></td>
                                     <td>
-                                        <span class="badge <%= s.status === 'Accepted' ? 'bg-success' : 'bg-danger' %> p-2">
-                                            <%= s.status %>
-                                        </span>
+                                        <% 
+                                            let statusClass = s.status.includes('Accepted') ? 'status-ac' : 'status-err';
+                                        %>
+                                        <span class="status-text <%= statusClass %>"><%= s.status %></span>
                                     </td>
                                     <td class="fw-bold fs-5"><%= s.points %></td>
                                 </tr>
@@ -97,60 +108,112 @@
             </div>
 
         <% } else if (currentTask) { %>
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h1 class="fw-bold m-0"><%= currentTask %></h1>
-                <div class="d-flex gap-2">
-                    <span class="limit-badge">Time: 2.000s</span>
-                    <span class="limit-badge">Memory: 256 MiB</span>
-                    <span class="limit-badge text-primary">Limit: 50 Submits</span>
-                </div>
+            
+            <div class="mb-4">
+                <ul class="nav nav-tabs">
+                    <li class="nav-item">
+                        <a class="nav-link <%= viewType === 'statement' ? 'active fw-bold text-dark' : 'text-secondary' %>" href="/contest/<%= contest.id %>?task=<%= encodeURIComponent(currentTask) %>&view=statement">Statement</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link <%= viewType === 'submissions' ? 'active fw-bold text-dark' : 'text-secondary' %>" href="/contest/<%= contest.id %>?task=<%= encodeURIComponent(currentTask) %>&view=submissions">Submissions</a>
+                    </li>
+                </ul>
             </div>
 
             <% if (viewType === 'statement') { %>
-                <div class="statement-container mb-4">
-                    <% if (typeof pdfUrl !== 'undefined' && pdfUrl) { %>
-                        <iframe src="<%= pdfUrl %>" width="100%" height="700px" style="border: none; border-radius: 4px;"></iframe>
-                    <% } else { %>
-                        <div class="statement-box">
-                            <%- taskStatementHtml %>
-                        </div>
-                    <% } %>
+                <div class="mb-3">
+                    <h1 class="fw-bold d-inline-block m-0" style="font-size: 38px;"><%= currentTask %></h1>
+                    <span class="text-muted ms-2 fs-5">description</span>
                 </div>
                 
-                <div class="card border-primary shadow-sm mb-5" id="submit-card">
+                <h3 class="fw-normal text-secondary mt-4 mb-3">Statement</h3>
+                
+                <% if (typeof pdfUrl !== 'undefined' && pdfUrl) { %>
+                    <div class="mb-4">
+                        <a href="<%= pdfUrl %>" download class="btn btn-success fw-semibold px-4 py-2" style="background-color: #5cb85c; border-color: #4cae4c;">
+                            Download task statement
+                        </a>
+                    </div>
+                <% } %>
+
+                <div class="statement-box mb-5">
+                    <%- taskStatementHtml %>
+                </div>
+
+                <h3 class="fw-normal text-secondary mt-5 mb-3">Some details</h3>
+                <table class="cms-table">
+                    <tbody>
+                        <tr>
+                            <td>Type</td>
+                            <td>Batch</td>
+                        </tr>
+                        <tr>
+                            <td>Time limit</td>
+                            <td><%= Number(taskLimits.timeLimit).toFixed(3) %> seconds</td>
+                        </tr>
+                        <tr>
+                            <td>Memory limit</td>
+                            <td><%= taskLimits.memoryLimit %> MiB</td>
+                        </tr>
+                        <tr>
+                            <td>Remaining Submissions</td>
+                            <td><%= remainingSubmissions %> / 50</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+            <% } else if (viewType === 'submissions') { %>
+                <div class="card border-primary shadow-sm mb-4" id="submit-card">
                     <div class="card-header bg-primary text-white fw-bold py-2">SUBMIT SOLUTION (C++)</div>
                     <div class="card-body p-3">
-                        <form action="/submit-code" method="POST" enctype="multipart/form-data" class="row g-2">
-                            <input type="hidden" name="contestId" value="<%= contest.id %>">
-                            <input type="hidden" name="taskName" value="<%= currentTask %>">
-                            <div class="col-md-9">
-                                <input type="file" name="codeFile" class="form-control" accept=".cpp" required id="fileInput">
-                            </div>
-                            <div class="col-md-3">
-                                <button type="submit" class="btn btn-success w-100 fw-bold" id="submitBtn">🚀 Submit Code</button>
-                            </div>
-                        </form>
+                        <% if (typeof remainingSubmissions !== 'undefined' && remainingSubmissions <= 0) { %>
+                            <div class="alert alert-danger m-0">თქვენ ამოგეწურათ ამ ამოცანაზე კოდის გაგზავნის ლიმიტი (მაქსიმუმ 50).</div>
+                        <% } else { %>
+                            <form action="/submit-code" method="POST" enctype="multipart/form-data" class="row g-2">
+                                <input type="hidden" name="contestId" value="<%= contest.id %>">
+                                <input type="hidden" name="taskName" value="<%= currentTask %>">
+                                <div class="col-md-9">
+                                    <input type="file" name="codeFile" class="form-control" accept=".cpp" required id="fileInput">
+                                </div>
+                                <div class="col-md-3">
+                                    <button type="submit" class="btn btn-success w-100 fw-bold" id="submitBtn">🚀 Submit Code</button>
+                                </div>
+                            </form>
+                        <% } %>
                     </div>
                 </div>
 
-            <% } else if (viewType === 'submissions') { %>
-                <h5 class="fw-bold text-secondary mb-3">ისტორია: <%= currentTask %></h5>
-                <table class="table table-bordered shadow-sm" style="background: white;">
-                    <thead class="table-light"><tr><th>გაგზავნის დრო</th><th>სტატუსი</th><th>ქულა</th></tr></thead>
-                    <tbody>
-                        <% if (typeof submissions !== 'undefined' && submissions.length > 0) { %>
-                            <% submissions.reverse().forEach(s => { %>
-                                <tr>
-                                    <td class="text-muted small fw-bold"><%= s.time %></td>
-                                    <td class="fw-bold <%= s.status === 'Accepted' ? 'text-success' : 'text-danger' %>"><%= s.status %></td>
-                                    <td class="fw-bold"><%= s.points %></td>
-                                </tr>
-                            <% }) %>
-                        <% } else { %>
-                            <tr><td colspan="3" class="text-center py-3 text-muted">ამ ამოცანაზე ისტორია ცარიელია.</td></tr>
-                        <% } %>
-                    </tbody>
-                </table>
+                <div class="table-responsive">
+                    <table class="table align-middle border shadow-sm" style="background: white;">
+                        <thead class="table-light">
+                            <tr>
+                                <th>გაგზავნის დრო</th>
+                                <th>სტატუსი</th>
+                                <th>ქულა</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (typeof submissions !== 'undefined' && submissions.length > 0) { %>
+                                <% submissions.reverse().forEach(s => { %>
+                                    <% if (s.taskName === currentTask) { %>
+                                        <tr>
+                                            <td class="text-muted small fw-bold" style="width: 30%;"><%= s.time %></td>
+                                            <td style="width: 50%;">
+                                                <% 
+                                                    let statusClass = s.status.includes('Accepted') ? 'status-ac' : 'status-err';
+                                                %>
+                                                <span class="status-text <%= statusClass %>"><%= s.status %></span>
+                                            </td>
+                                            <td class="fw-bold" style="width: 20%;"><%= s.points %></td>
+                                        </tr>
+                                    <% } %>
+                                <% }) %>
+                            <% } else { %>
+                                <tr><td colspan="3" class="text-center py-3 text-muted">ამ ამოცანაზე ისტორია ცარიელია.</td></tr>
+                            <% } %>
+                        </tbody>
+                    </table>
+                </div>
             <% } %>
 
         <% } else { %>
@@ -174,15 +237,19 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <% contest.tasks.forEach((task, index) => { %>
+                            <% contest.tasks.forEach((task, index) => { 
+                                let tData = (contest.tasksData && contest.tasksData.find(t => String(t.name).trim() === String(task).trim())) || null;
+                                let timeLimit = tData ? Number(tData.timeLimit).toFixed(3) + 's' : '2.000s';
+                                let memoryLimit = tData ? tData.memoryLimit + ' MiB' : '256 MiB';
+                            %>
                                 <tr>
                                     <td class="ps-3 text-muted fw-bold"><%= index + 1 %></td>
                                     <td class="fw-bold text-dark fs-5"><%= task %></td>
-                                    <td><span class="badge bg-light text-dark border">2.000s</span></td>
-                                    <td><span class="badge bg-light text-dark border">256 MiB</span></td>
+                                    <td><span class="badge bg-light text-dark border"><%= timeLimit %></span></td>
+                                    <td><span class="badge bg-light text-dark border"><%= memoryLimit %></span></td>
                                     <td class="text-center text-muted">მაქს. 50</td>
                                     <td class="text-center">
-                                        <a href="/contest/<%= contest.id %>?task=<%= task %>&view=statement" class="btn btn-sm btn-primary fw-bold px-3">გახსნა</a>
+                                        <a href="/contest/<%= contest.id %>?task=<%= encodeURIComponent(task) %>&view=statement" class="btn btn-sm btn-primary fw-bold px-3">გახსნა</a>
                                     </td>
                                 </tr>
                             <% }) %>
@@ -218,9 +285,8 @@
                     timerDisplay.style.color = "#ffc107";
                 }
                 
-                // 🔒 ბლოკავს მხოლოდ სტუდენტებს. ადმინებს და ჩეკერებს უპსოლვინგისთვის უტოვებს ღიას!
                 const userRole = "<%= role %>";
-                if (userRole !== 'admin' && userRole !== 'checker') {
+                if (userRole !== 'admin' && userRole !== 'checker' && userRole !== 'owner') {
                     if(submitBtn) { 
                         submitBtn.disabled = true; 
                         submitBtn.classList.replace('btn-success', 'btn-secondary');
