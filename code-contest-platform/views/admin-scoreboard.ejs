@@ -2,80 +2,101 @@
 <html lang="ka">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Scoreboard - cms.zarzma1.ge</title>
+    <title>Admin Scoreboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #fafafa; font-family: system-ui, sans-serif; }
-        .main-box { background: white; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 30px; margin-top: 50px; }
+        body { background-color: #f8f9fa; font-family: system-ui, sans-serif; }
+        .scoreboard-card { background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 30px; margin-top: 40px; }
+        .table th { background-color: #212529; color: white; text-align: center; vertical-align: middle; }
+        .table td { text-align: center; vertical-align: middle; }
+        .task-col { min-width: 120px; font-weight: 600; }
+        .total-col { font-weight: bold; color: #0d6efd; background-color: #f1f3f5; width: 120px; }
     </style>
 </head>
 <body>
-    <div class="container" style="max-width: 1000px;">
-        <div class="main-box">
-            <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
-                <h4 class="text-dark fw-bold m-0">Admin Scoreboard</h4>
+    <div class="container">
+        <div class="scoreboard-card">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="fw-bold m-0 text-dark">Admin Scoreboard</h3>
                 <a href="/contests" class="btn btn-outline-secondary btn-sm fw-bold">Back to Contests</a>
             </div>
 
-            <div class="card card-body bg-light mb-4 border-0 shadow-sm">
-                <form action="/admin/scoreboard" method="GET" class="row g-2 align-items-center">
-                    <div class="col-md-8">
-                        <label class="form-label small fw-bold text-secondary mb-1">აირჩიე კონტესტი შედეგების სანახავად:</label>
-                        <select name="contestId" class="form-select form-select-sm" onchange="this.form.submit()">
-                            <option value="">-- აირჩიე კონტესტი სიიდან --</option>
-                            <% contests.forEach(c => { %>
-                                <option value="<%= c.id %>" <%= selectedContest && selectedContest.id === c.id ? 'selected' : '' %>>
-                                    <%= c.title %>
-                                </option>
-                            <% }) %>
-                        </select>
-                    </div>
+            <div class="p-3 bg-light rounded mb-4 border">
+                <form action="/admin/scoreboard" method="GET" id="contestForm">
+                    <label class="form-label fw-bold text-secondary small text-uppercase">აირჩიე კონტესტი შედეგების სანახავად:</label>
+                    <select name="contestId" class="form-select fw-semibold" onchange="document.getElementById('contestForm').submit()">
+                        <option value="">-- აირჩიე კონტესტი --</option>
+                        <% contests.forEach(c => { %>
+                            <option value="<%= c.id %>" <%= selectedContest && selectedContest.id === c.id ? 'selected' : '' %>><%= c.title %></option>
+                        <% }) %>
+                    </select>
                 </form>
             </div>
 
-            <% if (!selectedContest) { %>
-                <div class="text-center my-5 text-muted">
-                    <h5>გთხოვთ აირჩიოთ კონტესტი ზედა მენიუდან შედეგების სანახავად.</h5>
+            <% if (selectedContest) { %>
+                <h4 class="fw-bold text-primary mb-3">კონტესტი: <%= selectedContest.title %></h4>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover shadow-sm align-middle">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">Rank</th>
+                                <th style="text-align: left; padding-left: 15px;">User (Name / Email)</th>
+                                <% selectedContest.tasks.forEach(task => { %>
+                                    <th class="task-col"><%= task %></th>
+                                <% }) %>
+                                <th class="total-col">Total Score</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (typeof usersData !== 'undefined' && usersData.length > 0) { %>
+                                <% 
+                                    // დავთვალოთ თითოეულის ჯამური ქულა სორტირებისთვის
+                                    usersData.forEach(user => {
+                                        let total = 0;
+                                        selectedContest.tasks.forEach(task => {
+                                            let sub = user.submissions && user.submissions.find(s => String(s.taskName).trim() === String(task).trim());
+                                            total += sub ? Number(sub.points || 0) : 0;
+                                        });
+                                        user.computedTotal = total;
+                                    });
+
+                                    // დავასორტიროთ ქულების მიხედვით კლებადობით
+                                    usersData.sort((a, b) => b.computedTotal - a.computedTotal);
+                                %>
+                                
+                                <% usersData.forEach((user, index) => { %>
+                                    <tr>
+                                        <td class="fw-bold text-muted"><%= index + 1 %></td>
+                                        <td style="text-align: left; padding-left: 15px;">
+                                            <div class="fw-bold text-dark"><%= user.name || 'სტუდენტი' %></div>
+                                            <div class="text-muted small"><%= user.email %></div>
+                                        </td>
+                                        
+                                        <% selectedContest.tasks.forEach(task => { %>
+                                            <% 
+                                                // ვეძებთ ბოლო ან საუკეთესო გაგზავნას ამ ამოცანაზე
+                                                let sub = user.submissions && user.submissions.find(s => String(s.taskName).trim() === String(task).trim());
+                                                let points = sub ? sub.points : '-';
+                                                let isMax = points === 100;
+                                            %>
+                                            <td class="fw-bold <%= isMax ? 'text-success fs-5' : (points > 0 ? 'text-warning' : 'text-secondary') %>">
+                                                <%= points %>
+                                            </td>
+                                        <% }) %>
+                                        
+                                        <td class="total-col fs-5"><%= user.computedTotal %></td>
+                                    </tr>
+                                <% }) %>
+                            <% } else { %>
+                                <tr>
+                                    <td colspan="<%= selectedContest.tasks.length + 3 %>" class="text-center py-4 text-muted">ამ კონტესტში მონაწილეები ჯერ არ გვყავს.</td>
+                                </tr>
+                            <% } %>
+                        </tbody>
+                    </table>
                 </div>
             <% } else { %>
-                <h5 class="text-primary fw-bold mb-3">კონტესტი: <%= selectedContest.title %></h5>
-                
-                <table class="table table-striped table-bordered bg-white small">
-                    <thead class="table-dark">
-                        <tr>
-                            <th style="width: 8%;">Rank</th>
-                            <th>User (Email)</th>
-                            <% selectedContest.tasks.forEach(task => { %>
-                                <th>Task: <%= task %></th>
-                            <% }) %>
-                            <th style="width: 15%;">Total Score</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <% if (scoreboard.length === 0) { %>
-                            <tr>
-                                <td colspan="<%= 3 + selectedContest.tasks.length %>" class="text-center text-muted py-4">
-                                    ამ კონტესტზე ჯერ არცერთი გამოგზავნილი კოდი (Submission) არ ფიქსირდება.
-                                </td>
-                            </tr>
-                        <% } else { %>
-                            <% scoreboard.forEach((sub, index) => { %>
-                                <tr>
-                                    <td class="fw-bold"><%= index + 1 %></td>
-                                    <td><%= sub.email %> <br><small class="text-muted"><%= sub.time %> - [<%= sub.status %>]</small></td>
-                                    
-                                    <% selectedContest.tasks.forEach(task => { %>
-                                        <td class="fw-bold <%= sub.taskName === task ? (sub.points === 100 ? 'text-success' : 'text-warning') : '' %>">
-                                            <%= sub.taskName === task ? sub.points : '-' %>
-                                        </td>
-                                    <% }) %>
-                                    
-                                    <td class="fw-bold text-primary"><%= sub.points %></td>
-                                </tr>
-                            <% }) %>
-                        <% } %>
-                    </tbody>
-                </table>
+                <div class="text-center py-5 text-muted">გთხოვთ აირჩიოთ კონტესტი ზემოთ მოცემული სიიდან შედეგების სანახავად.</div>
             <% } %>
         </div>
     </div>

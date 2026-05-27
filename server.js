@@ -350,7 +350,6 @@ app.post('/admin/delete-contest', (req, res) => {
     allSubmissions = allSubmissions.filter(s => String(s.contestId) !== String(contestId));
     writeData('submissions.json', allSubmissions);
 
-    // 🛠️ ბაგის ფიქსი: კონტესტის წაშლისას იშლება მასზე მიბმული ყველა კითხვა-პასუხიც!
     let allQuestions = readData('questions.json');
     allQuestions = allQuestions.filter(q => String(q.contestId) !== String(contestId));
     writeData('questions.json', allQuestions);
@@ -369,7 +368,7 @@ app.get('/contest/:id', (req, res) => {
     if (!contest) return res.status(404).send('კონტესტი ვერ მოიძებნა');
     
     const currentTask = req.query.task || null;
-    const viewType = req.query.view || 'overview'; // დეფოლტად Overview, თუ არაფერია არჩეული
+    const viewType = req.query.view || 'overview';
     
     const startTime = new Date(contest.createdAt);
     const endTime = new Date(startTime.getTime() + contest.duration * 60000);
@@ -572,7 +571,7 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
 });
 
 // ==========================================
-// 📊   ადმინის სკორბორდი
+// 📊 ადმინის სკორბორდი (სრულყოფილი ლოგიკა)
 // ==========================================
 app.get('/admin/scoreboard', (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
@@ -581,58 +580,52 @@ app.get('/admin/scoreboard', (req, res) => {
     const contests = readData('contests.json');
     let selectedContest = contests.find(c => String(c.id) === String(contestId)) || null;
     
-    let processedScoreboard = [];
+    let usersData = [];
 
     if (selectedContest) {
         const allSubmissions = readData('submissions.json');
+        const students = readData('students.json', []);
+        
+        // ვფილტრავთ ამ კონტესტის ყველა გაგზავნილ კოდს
         const contestSubmissions = allSubmissions.filter(s => String(s.contestId) === String(contestId));
 
-        const userMap = {};
+        // ვიღებთ უნიკალურ მეილებს, ვინც ამ კონტესტზე დაასაბმიტა
+        const uniqueEmails = [...new Set(contestSubmissions.map(s => s.email))];
 
-        contestSubmissions.forEach(sub => {
-            const email = sub.email;
-            const task = sub.taskName;
-            const points = parseInt(sub.points) || 0;
-            const subTime = new Date(sub.time);
+        uniqueEmails.forEach(email => {
+            // ვეძებთ სტუდენტის სახელს ბაზაში მეილის მიხედვით
+            const matchStudent = students.find(s => String(s.email).trim() === String(email).trim());
+            const studentName = matchStudent && matchStudent.name ? matchStudent.name : 'სტუდენტი';
 
-            if (!userMap[email]) {
-                userMap[email] = { email: email, tasks: {}, totalPoints: 0 };
-            }
-
-            if (!userMap[email].tasks[task] || points > userMap[email].tasks[task].points) {
-                userMap[email].tasks[task] = { points: points, time: subTime };
-            } else if (points === userMap[email].tasks[task].points && subTime < userMap[email].tasks[task].time) {
-                userMap[email].tasks[task].time = subTime;
-            }
-        });
-
-        processedScoreboard = Object.values(userMap).map(user => {
-            let total = 0;
-            let latestTime = new Date(0);
-
+            // თითოეული ამოცანისთვის ვინახავთ მხოლოდ საუკეთესო ქულას
+            let userBestSubmissions = [];
+            
             selectedContest.tasks.forEach(taskName => {
-                if (user.tasks[taskName]) {
-                    total += user.tasks[taskName].points;
-                    if (user.tasks[taskName].points > 0 && user.tasks[taskName].time > latestTime) {
-                        latestTime = user.tasks[taskName].time;
-                    }
+                const taskSubs = contestSubmissions.filter(s => String(s.email).trim() === String(email).trim() && String(s.taskName).trim() === String(taskName).trim());
+                if (taskSubs.length > 0) {
+                    // ვპოულობთ მაქსიმალურ ქულას ამ ამოცანაზე
+                    const bestSub = taskSubs.reduce((max, s) => (parseInt(s.points) || 0) > (parseInt(max.points) || 0) ? s : max, taskSubs[0]);
+                    userBestSubmissions.push({
+                        taskName: taskName.trim(),
+                        points: parseInt(bestSub.points) || 0,
+                        time: bestSub.time
+                    });
                 }
             });
 
-            return {
-                email: user.email,
-                totalPoints: total,
-                lastSubTime: total > 0 ? latestTime : new Date(8640000000000000)
-            };
-        });
-
-        processedScoreboard.sort((a, b) => {
-            if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
-            return a.lastSubTime - b.lastSubTime;
+            usersData.push({
+                name: studentName,
+                email: email,
+                submissions: userBestSubmissions
+            });
         });
     }
     
-    res.render('admin-scoreboard', { contests, selectedContest, scoreboard: processedScoreboard });
+    res.render('admin-scoreboard', { 
+        contests, 
+        selectedContest, 
+        usersData 
+    });
 });
 
 // ==========================================
@@ -646,10 +639,18 @@ app.get('/admin/register-student', (req, res) => {
 
 app.post('/admin/register-student', (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
-    const { email, password = "" } = req.body;
+    const { email, password = "", name = "" } = req.body;
     const students = readData('students.json', [{ email: 'student@gmail.com', password: '123' }]);
     if (students.some(s => s.email === email)) return res.render('register-student', { students, success: 'ეს მეილი გამოყენებულია!' });
-    if (email && password) { students.push({ id: Date.now().toString(), email: email.trim(), password: password.trim() }); writeData('students.json', students); }
+    if (email && password) { 
+        students.push({ 
+            id: Date.now().toString(), 
+            name: name.trim() || 'სტუდენტი',
+            email: email.trim(), 
+            password: password.trim() 
+        }); 
+        writeData('students.json', students); 
+    }
     res.redirect('/admin/register-student');
 });
 
@@ -663,54 +664,83 @@ app.post('/admin/unregister-student', (req, res) => {
 });
 
 // ==========================================
-// კომუნიკაცია (Questions მიბმული კონტესტზე)
+// კომუნიკაცია (Questions სრულად შესაბამისი EJS-თან)
 // ==========================================
 app.get('/communication', (req, res) => {
     if (!req.session.userId) return res.redirect('/');
     
-    const contestId = req.query.contestId || req.session.currentContestId || '';
+    const contestId = req.query.contestId || '';
+    const userRole = req.session.role || 'user';
+    const contests = readData('contests.json');
+    
+    let contestTitle = "";
+    let tasks = [];
+    
+    if (contestId) {
+        const currentContest = contests.find(c => String(c.id) === String(contestId));
+        if (currentContest) {
+            contestTitle = currentContest.title;
+            tasks = currentContest.tasks || [];
+        }
+    }
+
     const allQuestions = readData('questions.json');
+    let messages = [];
     
-    // ვფილტრავთ მხოლოდ მიმდინარე კონტესტის კითხვებს
-    let questions = allQuestions.filter(q => String(q.contestId) === String(contestId));
-    
-    if (req.session.role !== 'admin' && req.session.role !== 'owner') {
-        questions = questions.filter(q => q.user === req.session.userEmail);
+    if (userRole === 'admin' || userRole === 'owner') {
+        // ადმინს/Owner-ს გამოუჩნდეს ყველა დასმული კითხვა, რომ უპასუხოს
+        messages = allQuestions.map(q => {
+            const cMatch = contests.find(c => String(c.id) === String(q.contestId));
+            return { ...q, contestTitle: cMatch ? cMatch.title : "Unknown Contest" };
+        });
+    } else {
+        // მოსწავლეს გამოუჩნდეს მხოლოდ ამ კონტესტის ფარგლებში დასმული თავისი კითხვები
+        if (contestId) {
+            messages = allQuestions.filter(q => String(q.contestId) === String(contestId) && q.userEmail === req.session.userEmail);
+        }
     }
     
-    res.render('communication', { questions, role: req.session.role, contestId });
+    res.render('communication', { 
+        messages, 
+        role: userRole, 
+        contestId, 
+        contestTitle, 
+        tasks 
+    });
 });
 
-app.post('/ask-question', (req, res) => {
+app.post('/communication/ask', (req, res) => {
     if (!req.session.userId) return res.redirect('/');
-    const { subject, text, contestId } = req.body;
-    if (text) {
+    const { taskName, question, contestId } = req.body;
+    
+    if (question) {
         const allQuestions = readData('questions.json');
         allQuestions.push({ 
             id: Date.now().toString(), 
-            _id: Date.now().toString(), 
-            contestId: String(contestId), // ვინახავთ კონტესტის ID-ს
-            user: req.session.userEmail, 
-            subject, 
-            text, 
-            reply: '', 
-            time: new Date().toLocaleTimeString() 
+            contestId: String(contestId),
+            userEmail: req.session.userEmail, 
+            taskName: taskName || 'General', 
+            question: question.trim(), 
+            answer: '', 
+            time: new Date().toLocaleTimeString('ka-GE', { hour: '2-digit', minute: '2-digit' })
         });
         writeData('questions.json', allQuestions);
     }
     res.redirect(`/communication?contestId=${contestId}`);
 });
 
-app.post('/admin/reply-question', (req, res) => {
+app.post('/communication/reply', (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
-    const { qId, contestId } = req.body;
+    const { messageId, answer, redirectUrl } = req.body;
+    
     const allQuestions = readData('questions.json');
-    const question = allQuestions.find(q => String(q.id) === String(qId) || String(q._id) === String(qId));
-    if (question) { 
-        question.reply = req.body.replyText; 
+    const question = allQuestions.find(q => String(q.id) === String(messageId));
+    
+    if (question && answer) { 
+        question.answer = answer.trim(); 
         writeData('questions.json', allQuestions); 
     }
-    res.redirect(`/communication?contestId=${contestId}`);
+    res.redirect(redirectUrl || '/communication');
 });
 
 // სერვერის გაშვება

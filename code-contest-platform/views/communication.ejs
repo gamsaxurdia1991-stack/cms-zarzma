@@ -2,53 +2,104 @@
 <html lang="ka">
 <head>
     <meta charset="UTF-8">
-    <title>Communication</title>
+    <title>Communication - Zarzma Judge</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; font-family: system-ui, sans-serif; }
+        .comm-container { max-width: 900px; margin: 40px auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .msg-box { border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; margin-bottom: 20px; background-color: #ffffff; }
+        .msg-header { display: flex; justify-content: space-between; font-size: 13px; color: #6c757d; margin-bottom: 8px; border-bottom: 1px dashed #eee; padding-bottom: 5px; }
+        .reply-box { background-color: #f8f9fa; border-left: 3px solid #0d6efd; padding: 10px 15px; margin-top: 10px; border-radius: 0 4px 4px 0; }
+    </style>
 </head>
-<body class="bg-light" style="padding-top: 40px; font-family: system-ui, sans-serif;">
-    <div class="container" style="max-width: 800px;">
-        <div class="card card-body shadow-sm border-0 p-4 mb-4">
-            <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
-                <h4 class="fw-bold m-0">Communication Panel</h4>
-                <a href="/contests" class="btn btn-outline-secondary btn-sm fw-bold">Back</a>
+<body>
+    <div class="container">
+        <div class="comm-container">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h3 class="fw-bold m-0">💬 Communication</h3>
+                    <% if (typeof contestTitle !== 'undefined' && contestTitle) { %>
+                        <span class="text-muted small fw-bold">კონტესტი: <%= contestTitle %></span>
+                    <% } %>
+                </div>
+                <% if (typeof contestId !== 'undefined' && contestId) { %>
+                    <a href="/contest/<%= contestId %>" class="btn btn-outline-secondary btn-sm fw-bold">⬅️ უკან დაბრუნება</a>
+                <% } else { %>
+                    <a href="/contests" class="btn btn-outline-secondary btn-sm fw-bold">⬅️ კონტესტები</a>
+                <% } %>
             </div>
 
-            <% if (role !== 'admin') { %>
-                <form action="/ask-question" method="POST" class="mb-4 bg-light p-3 rounded border">
-                    <h6 class="fw-bold text-secondary mb-2">ASK A QUESTION</h6>
-                    <div class="mb-2"><input type="text" name="subject" class="form-control form-control-sm" placeholder="Subject / Task" required></div>
-                    <div class="mb-2"><textarea name="text" class="form-control form-control-sm" rows="2" placeholder="Your question..." required></textarea></div>
-                    <button type="submit" class="btn btn-primary btn-sm fw-bold px-3">Send</button>
-                </form>
+            <% if (role !== 'admin' && role !== 'owner') { %>
+                <div class="card mb-4 border-primary">
+                    <div class="card-header bg-primary text-white fw-bold py-2">ახალი კითხვის გაგზავნა</div>
+                    <div class="card-body p-3">
+                        <form action="/communication/ask" method="POST">
+                            <input type="hidden" name="contestId" value="<%= contestId %>">
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-muted">აირჩიე ამოცანა ან ზოგადი თემა:</label>
+                                <select name="taskName" class="form-select form-select-sm" required>
+                                    <option value="General">ზოგადი კითხვა კონტესტზე</option>
+                                    <% if (typeof tasks !== 'undefined' && tasks) { %>
+                                        <% tasks.forEach(t => { %>
+                                            <option value="<%= t %>"><%= t %></option>
+                                        <% }) %>
+                                    <% } %>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-muted">შეტყობინების ტექსტი:</label>
+                                <textarea name="question" class="form-control" rows="3" placeholder="დაწერე შენი კითხვა აქ..." required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-sm fw-bold px-4">🚀 გაგზავნა</button>
+                        </form>
+                    </div>
+                </div>
             <% } %>
 
-            <h5 class="text-secondary small fw-bold mb-3">QUESTIONS & ANSWERS</h5>
-            <div class="d-flex flex-column gap-3">
-                <% questions.reverse().forEach(q => { %>
-                    <div class="p-3 border rounded bg-white shadow-sm">
-                        <div class="d-flex justify-content-between small text-muted mb-1">
-                            <span><b>From:</b> <%= q.user %></span>
-                            <span><%= q.time %></span>
-                        </div>
-                        <h6 class="fw-bold text-dark mb-1">Subject: <%= q.subject %></h6>
-                        <p class="text-secondary small mb-2"><%= q.text %></p>
-                        
-                        <% if (q.reply) { %>
-                            <div class="p-2 bg-light border-start border-success border-3 small rounded">
-                                <b>📢 Admin Reply:</b> <span class="text-dark"><%= q.reply %></span>
+            <h5 class="fw-bold text-secondary mb-3">კითხვები და პასუხები</h5>
+            <hr>
+
+            <% if (typeof messages !== 'undefined' && messages.length > 0) { %>
+                <% messages.forEach(msg => { %>
+                    <div class="msg-box shadow-sm">
+                        <div class="msg-header">
+                            <div>
+                                <span class="badge bg-secondary me-2"><%= msg.taskName %></span>
+                                <b><%= msg.userEmail %></b> 
+                                <% if(msg.contestTitle) { %> <span class="text-primary mx-1">(<%= msg.contestTitle %>)</span> <% } %>
                             </div>
-                        <% } else if (role === 'admin') { %>
-                            <form action="/admin/reply-question" method="POST" class="row g-1 mt-2">
-                                <input type="hidden" name="qId" value="<%= q._id %>">
-                                <div class="col-md-9"><input type="text" name="replyText" class="form-control form-control-sm" placeholder="ჩაწერე პასუხი..." required></div>
-                                <div class="col-md-3"><button type="submit" class="btn btn-success btn-sm w-100 fw-bold">Reply</button></div>
-                            </form>
+                            <div><%= msg.time %></div>
+                        </div>
+                        <div class="fs-6 text-dark py-1" style="white-space: pre-line;"><%= msg.question %></div>
+
+                        <% if (msg.answer) { %>
+                            <div class="reply-box">
+                                <div class="small text-primary fw-bold mb-1">📢 პასუხი ადმინისტრაციისგან:</div>
+                                <div class="text-dark small" style="white-space: pre-line;"><%= msg.answer %></div>
+                            </div>
                         <% } else { %>
-                            <div class="small text-muted italic">⌛ პასუხის მოლოდინში...</div>
+                            <% if (role === 'admin' || role === 'owner') { %>
+                                <div class="mt-3 p-2 bg-light border rounded">
+                                    <form action="/communication/reply" method="POST" class="row g-2">
+                                        <input type="hidden" name="messageId" value="<%= msg.id %>">
+                                        <input type="hidden" name="redirectUrl" value="/communication?contestId=<%= contestId || '' %>">
+                                        <div class="col-md-10">
+                                            <input type="text" name="answer" class="form-control form-control-sm" placeholder="დაუწერე პასუხი მოსწავლეს..." required>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <button type="submit" class="btn btn-success btn-sm w-100 fw-bold">Answer</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            <% } else { %>
+                                <div class="text-muted small mt-2 italic">⏳ მოლოდინის რეჟიმში...</div>
+                            <% } %>
                         <% } %>
                     </div>
                 <% }) %>
-            </div>
+            <% } else { %>
+                <div class="text-center py-4 text-muted">კითხვების ისტორია ცარიელია.</div>
+            <% } %>
         </div>
     </div>
 </body>
