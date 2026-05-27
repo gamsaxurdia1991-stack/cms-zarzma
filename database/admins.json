@@ -11,6 +11,14 @@
     "username": "Grigoli",
     "email": "Zarzma7@gmail.com",
     "password": "123qweasd",
-    "lastActive": null
+    "lastActive": "2026-05-27T18:34:29.521Z"
+  },
+  {
+    "id": "1779906862646",
+    "username": "Lasha",
+    "email": "Zarzma11@gmail.com",
+    "password": "1100",
+    "role": "admin",
+    "lastActive": "2026-05-27T18:36:24.443Z"
   }
 ]
