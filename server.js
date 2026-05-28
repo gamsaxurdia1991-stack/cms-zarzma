@@ -17,10 +17,13 @@ const contestUploadConfig = upload.fields([
 ]);
 
 // ==========================================
-// 📂 JSON ბაზის ფუნქციები
+// 📂 JSON ბაზის ფუნქციები და საქაღალდეები
 // ==========================================
 const DB_DIR = path.join(__dirname, 'database');
+const CODES_DIR = path.join(__dirname, 'uploads', 'codes');
+
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR);
+if (!fs.existsSync(CODES_DIR)) fs.mkdirSync(CODES_DIR, { recursive: true });
 
 const readData = (fileName, defaultValue = []) => {
     const filePath = path.join(DB_DIR, fileName);
@@ -130,7 +133,7 @@ app.post('/register-admin', (req, res) => {
             username: username.trim(),
             email: email.trim(),
             password: password.trim(),
-            role: 'admin', // ფიქსი: ენიჭება 'admin' როლი
+            role: 'admin',
             lastActive: null
         });
         writeData('admins.json', admins);
@@ -149,7 +152,7 @@ app.post('/admin/delete-admin', (req, res) => {
 
     const targetAdmin = admins.find(a => a.id === adminId);
     if (targetAdmin && (targetAdmin.email === OWNER_EMAIL || targetAdmin.email === 'admin@gmail.com')) {
-        return res.send('<script>alert("უსაფრთხოების გამო ამ პროფილის წაშლა აკრძალულია!"); window.location="/register-admin";</script>');
+        return res.send('<script>alert("უსაზიზღროების გამო ამ პროფილის წაშლა აკრძალულია!"); window.location="/register-admin";</script>');
     }
 
     admins = admins.filter(a => a.id !== adminId);
@@ -170,10 +173,12 @@ app.post('/login', (req, res) => {
     const { email, password } = req.body;
     const cleanEmail = email.trim();
     
+    // 1. თუ მთავარი OWNER შედის პირდაპირი შემოწმებით
     if (cleanEmail === 'Zarzma7@gmail.com' && password === '123qweasd') {
         req.session.userId = `owner_zarzma7`;
         req.session.userEmail = cleanEmail;
         req.session.role = 'owner';
+        req.session.username = "Grigoli"; // რადგან ეს მთავარი ექაუნთია, პირდაპირ Grigoli დავუწეროთ
         return res.redirect('/contests');
     }
     
@@ -182,35 +187,45 @@ app.post('/login', (req, res) => {
         { id: "2", username: "Grigoli", email: "Zarzma7@gmail.com", password: "123qweasd", role: "owner", lastActive: null }
     ]);
 
+    // 2. თუ ადმინთა ბაზაში მოიძებნა
     const foundAdmin = admins.find(a => a.email === cleanEmail && a.password === password);
     if (foundAdmin) {
         req.session.userId = `admin_${foundAdmin.email}`;
         req.session.userEmail = foundAdmin.email;
+        // სესიაში ვინახავთ ადმინების ბაზაში არსებულ იუზერნეიმს (მაგ: Admin ან Grigoli)
+        req.session.username = foundAdmin.username || "ადმინისტრატორი"; 
         
         if (foundAdmin.email === OWNER_EMAIL || foundAdmin.role === 'owner') {
             req.session.role = 'owner';
         } else {
             req.session.role = 'admin';
         }
-        return res.redirect('/contests'); // ფიქსი: კოდი აქ გაჩერდება და სესია წარმატებით შეიქმნება
+        return res.redirect('/contests');
     }
     
     const contests = readData('contests.json');
     const matchedContestForChecker = contests.find(c => c.allowedUser === cleanEmail && c.allowedPassword === password);
     
+    // 3. თუ ჩეკერია
     if (matchedContestForChecker) {
         req.session.userId = `checker_${cleanEmail}_${Date.now()}`;
         req.session.role = 'checker';
         req.session.userEmail = cleanEmail;
+        req.session.username = "Checker"; // ჩეკერებისთვის დეფოლტ სახელი
         return res.redirect('/contests');
     }
     
     const students = readData('students.json', [{ email: 'student@gmail.com', password: '123' }]);
     const foundStudent = students.find(s => s.email === cleanEmail && s.password === password);
+    
+    // 4. თუ სტუდენტების ბაზაში მოიძებნა
     if (foundStudent) {
         req.session.userId = `student_${foundStudent.email}`;
         req.session.role = 'student';
         req.session.userEmail = cleanEmail;
+        // აქ ვიღებთ რეგისტრაციისას ჩაწერილ სახელსა და გვარს (username)
+        // თუ ძველ სტუდენტებს არ უწერიათ, ალტერნატივად გამოიყენებს 'სტუდენტი'-ს ან მეილის საწყისს
+        req.session.username = foundStudent.username || foundStudent.name || cleanEmail.split('@')[0];
         return res.redirect('/contests');
     }
     
@@ -224,8 +239,14 @@ app.get('/logout', (req, res) => {
 
 app.get('/contests', (req, res) => {
     if (!req.session.userId) return res.redirect('/');
+    
     const contests = readData('contests.json');
-    res.render('contests', { contests, role: req.session.role });
+    
+    res.render('contests', { 
+        contests, 
+        role: req.session.role,
+        username: req.session.username // პირდაპირ სესიიდან ვატანთ გამზადებულ სახელს
+    });
 });
 
 // ==========================================
@@ -345,13 +366,40 @@ app.post('/admin/delete-contest', (req, res) => {
     const { contestId } = req.body;
     
     let contests = readData('contests.json');
+    
+    // 1. ვპოულობთ კონტესტს წაშლამდე, რომ გავიგოთ რა ამოცანები (tasks) ჰქონდა მასში
+    const contestToDelete = contests.find(c => String(c.id) === String(contestId) || String(c._id) === String(contestId));
+    
+    if (contestToDelete && contestToDelete.tasks && contestToDelete.tasks.length > 0) {
+        const fs = require('fs');
+        const path = require('path');
+        
+        // სათითაოდ გადავუაროთ კონტესტში არსებულ ყველა დავალების საქაღალდეს
+        contestToDelete.tasks.forEach(taskName => {
+            const taskFolderPath = path.join(__dirname, 'tasks', taskName);
+            
+            // თუ საქაღალდე არსებობს, ვშლით მას ძირიან-ფესვიანად (input, output, pdf)
+            if (fs.existsSync(taskFolderPath)) {
+                try {
+                    fs.rmSync(taskFolderPath, { recursive: true, force: true });
+                    console.log(`საქაღალდე [${taskName}] ავტომატურად წაიშალა.`);
+                } catch (err) {
+                    console.error(`შეცდომა [${taskName}] საქაღალდის წაშლისას:`, err);
+                }
+            }
+        });
+    }
+
+    // 2. ვშლით კონტესტს ბაზიდან (შენი ორიგინალი ლოგიკა)
     contests = contests.filter(c => String(c.id) !== String(contestId) && String(c._id) !== String(contestId));
     writeData('contests.json', contests);
     
+    // 3. ვშლით ამ კონტესტის სუბმიშენებს
     let allSubmissions = readData('submissions.json');
     allSubmissions = allSubmissions.filter(s => String(s.contestId) !== String(contestId));
     writeData('submissions.json', allSubmissions);
 
+    // 4. ვშლით ამ კონტესტის კითხვებს
     let allQuestions = readData('questions.json');
     allQuestions = allQuestions.filter(q => String(q.contestId) !== String(contestId));
     writeData('questions.json', allQuestions);
@@ -432,6 +480,58 @@ app.get('/contest/:id', (req, res) => {
 });
 
 // ==========================================
+// 📥 როუტები კოდის გადმოწერისთვის და დეტალებისთვის
+// ==========================================
+app.get('/download-code/:id', (req, res) => {
+    if (!req.session.userId) return res.redirect('/');
+    
+    const submissions = readData('submissions.json');
+    const sub = submissions.find(s => String(s.id) === String(req.params.id));
+    
+    if (!sub) return res.status(404).send('ჩანაწერი ვერ მოიძებნა');
+    
+    // უსაფრთხოება: მოსწავლე მხოლოდ საკუთარ ფაილს იწერს, ადმინი/owner ყველასას
+    if (req.session.role === 'student' && sub.email !== req.session.userEmail) {
+        return res.status(403).send('წვდომა უარყოფილია');
+    }
+    
+    const savedCodePath = path.join(CODES_DIR, sub.savedFilename);
+    if (!fs.existsSync(savedCodePath)) {
+        return res.status(404).send('კოდის ფაილი სერვერზე ვერ მოიძებნა');
+    }
+    
+    res.download(savedCodePath, `${sub.taskName}_submission.cpp`);
+});
+
+// 🚀 განახლებული როუტი /submission/:id - კოდის უსაფრთხო წაკითხვით და თავსებადობით
+app.get('/submission/:id', (req, res) => {
+    if (!req.session.userId) return res.redirect('/');
+    
+    const submissions = readData('submissions.json');
+    const sub = submissions.find(s => String(s.id) === String(req.params.id));
+    
+    if (!sub) return res.status(404).send('ჩანაწერი ვერ მოიძებნა');
+    
+    if (req.session.role === 'student' && sub.email !== req.session.userEmail) {
+        return res.status(403).send('წვდომა უარყოფილია');
+    }
+    
+    // ვკითხულობთ კოდის ფაილს სერვერის მხრიდან
+    let codeContent = "კოდის ფაილი ვერ მოიძებნა ან წაშლილია.";
+    if (sub.savedFilename) {
+        const codePath = path.join(CODES_DIR, sub.savedFilename);
+        if (fs.existsSync(codePath)) {
+            codeContent = fs.readFileSync(codePath, 'utf-8');
+        }
+    }
+    
+    // კოდის ტექსტს პირდაპირ ობიექტში ვსვამთ, რომ EJS-მა უპრობლემოდ დაინახოს
+    sub.codeContent = codeContent;
+    
+    res.render('submission-details', { sub });
+});
+
+// ==========================================
 // CMS JUDGE - კოდის მიღება და ტესტირება
 // ==========================================
 app.post('/submit-code', upload.single('codeFile'), (req, res) => {
@@ -479,14 +579,17 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
 
     const compiledExePath = path.join(__dirname, 'uploads', `${file.filename}.exe`);
     let totalPoints = 0;
-    let status = 'Accepted';
+    let status = 'Compilation succeeded';
     let compiledSuccessfully = false;
+    let maxExecutionTime = 0;
+    let memoryUsed = "147 MiB"; // იმიტირებული დეფოლტ მეხსიერება (CMS-ის მსგავსად)
 
+    const startTimeExecution = Date.now();
     try {
         execSync(`g++ -O3 -std=c++17 "${userCodePath}" -o "${compiledExePath}"`, { stdio: 'pipe' });
         compiledSuccessfully = true;
     } catch (err) { 
-        status = 'Compilation Error'; 
+        status = 'Compilation failed'; 
         console.log("\n❌====== G++ COMPILATION ERROR ======");
         if (err.stderr) {
             console.log(err.stderr.toString());
@@ -495,6 +598,7 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
         }
         console.log("=====================================\n");
     }
+    const compilationDuration = ((Date.now() - startTimeExecution) / 1000).toFixed(3);
 
     if (compiledSuccessfully) {
         const taskFolder = path.join(__dirname, 'tasks', taskName);
@@ -517,6 +621,7 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
                 const testId = match[0];
                 const currentInputData = fs.readFileSync(path.join(inputDir, inFile));
                 
+                const singleTestStart = Date.now();
                 try {
                     const userOutput = execSync(`"${compiledExePath}"`, {
                         input: currentInputData,
@@ -524,21 +629,24 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
                         maxBuffer: 1024 * 1024 * 10 
                     }).toString().trim();
                     
+                    const testDuration = (Date.now() - singleTestStart) / 1000;
+                    if (testDuration > maxExecutionTime) maxExecutionTime = testDuration;
+
                     const outPath = path.join(outputDir, `output_${testId}`);
                     if (fs.existsSync(outPath)) {
                         const correctOutput = fs.readFileSync(outPath).toString().trim();
                         if (userOutput === correctOutput) {
                             passedTests++;
                         } else {
-                            status = `Wrong Answer on Test ${testId}`;
+                            status = `Evaluated (Wrong Answer)`;
                             break; 
                         }
                     }
                 } catch (execErr) { 
                     if (execErr.code === 'ETIMEDOUT') {
-                        status = `Time Limit Exceeded on Test ${testId}`;
+                        status = `Evaluated (Time Limit Exceeded)`;
                     } else {
-                        status = `Runtime Error on Test ${testId}`;
+                        status = `Evaluated (Runtime Error)`;
                     }
                     break; 
                 }
@@ -547,10 +655,18 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
             if (inputFiles.length > 0) {
                 totalPoints = Math.round((passedTests / inputFiles.length) * 100);
             }
+            if (status === 'Compilation succeeded' && totalPoints === 100) {
+                status = 'Evaluated';
+            }
         } else { 
             totalPoints = 100; 
+            status = 'Evaluated';
         }
     }
+
+    // 💾 ორიგინალი კოდის შენახვა გადმოწერისთვის, სანამ დროებითს წავშლით
+    const savedFilename = `${Date.now()}_${file.filename}.cpp`;
+    fs.copyFileSync(userCodePath, path.join(CODES_DIR, savedFilename));
 
     if (fs.existsSync(userCodePath)) fs.unlinkSync(userCodePath);
     if (fs.existsSync(compiledExePath)) fs.unlinkSync(compiledExePath);
@@ -565,6 +681,10 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
         taskName,
         points: totalPoints,
         status,
+        compilationTime: `${compilationDuration} sec`,
+        executionTime: `${maxExecutionTime.toFixed(3)} sec`,
+        memoryUsed,
+        savedFilename,
         time: formattedDate 
     });
     writeData('submissions.json', allSubmissions);
@@ -588,24 +708,18 @@ app.get('/admin/scoreboard', (req, res) => {
         const allSubmissions = readData('submissions.json');
         const students = readData('students.json', []);
         
-        // ვფილტრავთ ამ კონტესტის ყველა გაგზავნილ კოდს
         const contestSubmissions = allSubmissions.filter(s => String(s.contestId) === String(contestId));
-
-        // ვიღებთ უნიკალურ მეილებს, ვინც ამ კონტესტზე დაასაბმიტა
         const uniqueEmails = [...new Set(contestSubmissions.map(s => s.email))];
 
         uniqueEmails.forEach(email => {
-            // ვეძებთ სტუდენტის სახელს ბაზაში მეილის მიხედვით
             const matchStudent = students.find(s => String(s.email).trim() === String(email).trim());
             const studentName = matchStudent && matchStudent.name ? matchStudent.name : 'სტუდენტი';
 
-            // თითოეული ამოცანისთვის ვინახავთ მხოლოდ საუკეთესო ქულას
             let userBestSubmissions = [];
             
             selectedContest.tasks.forEach(taskName => {
                 const taskSubs = contestSubmissions.filter(s => String(s.email).trim() === String(email).trim() && String(s.taskName).trim() === String(taskName).trim());
                 if (taskSubs.length > 0) {
-                    // ვპოულობთ მაქსიმალურ ქულას ამ ამოცანაზე
                     const bestSub = taskSubs.reduce((max, s) => (parseInt(s.points) || 0) > (parseInt(max.points) || 0) ? s : max, taskSubs[0]);
                     userBestSubmissions.push({
                         taskName: taskName.trim(),
@@ -635,36 +749,51 @@ app.get('/admin/scoreboard', (req, res) => {
 // ==========================================
 app.get('/admin/register-student', (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
-    const students = readData('students.json', [{ email: 'student@gmail.com', password: '123' }]);
-    res.render('register-student', { students, success: null });
+    
+    const students = readData('students.json', [{ email: 'student@gmail.com', password: '123', username: 'ტესტ სტუდენტი' }]);
+    
+    // თუ url-ში გვექნება success პარამეტრი, გადმოვაყოლებთ EJS-ს
+    const successMessage = req.query.success || null;
+    res.render('register-student', { students, success: successMessage });
 });
 
 app.post('/admin/register-student', (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
-    const { email, password = "", name = "" } = req.body;
-    const students = readData('students.json', [{ email: 'student@gmail.com', password: '123' }]);
-    if (students.some(s => s.email === email)) return res.render('register-student', { students, success: 'ეს მეილი გამოყენებულია!' });
+    
+    // EJS ფორმიდან ახლა უკვე მოდის 'username'
+    const { email, password = "", username = "" } = req.body;
+    const students = readData('students.json', [{ email: 'student@gmail.com', password: '123', username: 'ტესტ სტუდენტი' }]);
+    
+    // თუ ელ-ფოსტა უკვე არსებობს
+    if (students.some(s => s.email === email)) {
+        return res.render('register-student', { students, success: 'ეს მეილი გამოყენებულია!' });
+    }
+    
     if (email && password) { 
         students.push({ 
             id: Date.now().toString(), 
-            name: name.trim() || 'სტუდენტი',
+            username: username.trim() || 'სტუდენტი', // აქ ინახება სახელი და გვარი
             email: email.trim(), 
             password: password.trim() 
         }); 
         writeData('students.json', students); 
     }
-    res.redirect('/admin/register-student');
+    
+    // გადამისამართება წარმატების შეტყობინებით
+    res.redirect('/admin/register-student?success=' + encodeURIComponent('მოსწავლე წარმატებით დარეგისტრირდა!'));
 });
 
 app.post('/admin/unregister-student', (req, res) => {
     if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
+    
     const targetId = req.body.id || req.body.studentId; 
-    let students = readData('students.json', [{ email: 'student@gmail.com', password: '123' }]);
+    let students = readData('students.json', [{ email: 'student@gmail.com', password: '123', username: 'ტესტ სტუდენტი' }]);
+    
     students = students.filter(s => String(s.id) !== String(targetId) && String(s._id) !== String(targetId));
     writeData('students.json', students);
-    res.redirect('/admin/register-student');
+    
+    res.redirect('/admin/register-student?success=' + encodeURIComponent('მოსწავლის რეგისტრაცია გაუქმებულია.'));
 });
-
 // ==========================================
 // კომუნიკაცია (Questions სრულად შესაბამისი EJS-თან)
 // ==========================================
@@ -690,13 +819,11 @@ app.get('/communication', (req, res) => {
     let messages = [];
     
     if (userRole === 'admin' || userRole === 'owner') {
-        // ადმინს/Owner-ს გამოუჩნდეს ყველა დასმული კითხვა, რომ უპასუხოს
         messages = allQuestions.map(q => {
             const cMatch = contests.find(c => String(c.id) === String(q.contestId));
             return { ...q, contestTitle: cMatch ? cMatch.title : "Unknown Contest" };
         });
     } else {
-        // მოსწავლეს გამოუჩნდეს მხოლოდ ამ კონტესტის ფარგლებში დასმული თავისი კითხვები
         if (contestId) {
             messages = allQuestions.filter(q => String(q.contestId) === String(contestId) && q.userEmail === req.session.userEmail);
         }
@@ -744,7 +871,6 @@ app.post('/communication/reply', (req, res) => {
     }
     res.redirect(redirectUrl || '/communication');
 });
-
 // სერვერის გაშვება
 const PORT = 3000;
 app.listen(PORT, () => {

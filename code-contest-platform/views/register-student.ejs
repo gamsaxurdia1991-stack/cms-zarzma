@@ -6,8 +6,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light" style="padding-top: 50px; font-family: system-ui, sans-serif;">
-    <div class="container" style="max-width: 750px;">
-        <div class="card card-body shadow-sm border-0 p-4">
+    <div class="container" style="max-width: 850px;"> <div class="card card-body shadow-sm border-0 p-4">
             <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
                 <h4 class="fw-bold m-0 text-dark">Register / Unregister Students</h4>
                 <a href="/contests" class="btn btn-outline-secondary btn-sm fw-bold">Back</a>
@@ -20,10 +19,13 @@
             <% } %>
 
             <form action="/admin/register-student" method="POST" class="row g-2 mb-4">
-                <div class="col-md-5">
+                <div class="col-md-4">
+                    <input type="text" name="username" class="form-control form-control-sm" placeholder="მოსწავლის სახელი და გვარი" required autocomplete="off">
+                </div>
+                <div class="col-md-3">
                     <input type="email" name="email" class="form-control form-control-sm" placeholder="Student Email" required autocomplete="off">
                 </div>
-                <div class="col-md-5">
+                <div class="col-md-3">
                     <input type="text" name="password" class="form-control form-control-sm" placeholder="Password" required autocomplete="off">
                 </div>
                 <div class="col-md-2">
@@ -37,7 +39,8 @@
                     <% students.forEach(s => { %>
                         <div class="list-group-item d-flex justify-content-between align-items-center small py-2">
                             <div>
-                                <span class="fw-bold text-dark">📧 <%= s.email %></span>
+                                <span class="fw-bold text-dark me-2">👤 <%= s.username || 'სახელი არ აქვს' %></span>
+                                <span class="text-muted small">📧 <%= s.email %></span>
                                 <span class="text-muted ms-3">Password: <code><%= s.password %></code></span>
                             </div>
                             
