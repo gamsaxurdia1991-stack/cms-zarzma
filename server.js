@@ -6,7 +6,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const { marked } = require('marked');
 const mongoose = require('mongoose');
-const MongoStore = require('connect-mongo');
+const MongoStore = require('connect-mongo').default || require('connect-mongo');
 
 // ==========================================
 // 🔗 MongoDB კავშირი
