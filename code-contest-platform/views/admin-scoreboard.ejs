@@ -1,104 +1,132 @@
 <!DOCTYPE html>
 <html lang="ka">
 <head>
-    <meta charset="UTF-8">
-    <title>Admin Scoreboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background-color: #f8f9fa; font-family: system-ui, sans-serif; }
-        .scoreboard-card { background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 30px; margin-top: 40px; }
-        .table th { background-color: #212529; color: white; text-align: center; vertical-align: middle; }
-        .table td { text-align: center; vertical-align: middle; }
-        .task-col { min-width: 120px; font-weight: 600; }
-        .total-col { font-weight: bold; color: #0d6efd; background-color: #f1f3f5; width: 120px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scoreboard — Zarzma Judge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/public/style.css">
 </head>
 <body>
-    <div class="container">
-        <div class="scoreboard-card">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h3 class="fw-bold m-0 text-dark">Admin Scoreboard</h3>
-                <a href="/contests" class="btn btn-outline-secondary btn-sm fw-bold">Back to Contests</a>
-            </div>
 
-            <div class="p-3 bg-light rounded mb-4 border">
-                <form action="/admin/scoreboard" method="GET" id="contestForm">
-                    <label class="form-label fw-bold text-secondary small text-uppercase">აირჩიე კონტესტი შედეგების სანახავად:</label>
-                    <select name="contestId" class="form-select fw-semibold" onchange="document.getElementById('contestForm').submit()">
-                        <option value="">-- აირჩიე კონტესტი --</option>
-                        <% contests.forEach(c => { %>
-                            <option value="<%= c.id %>" <%= selectedContest && selectedContest.id === c.id ? 'selected' : '' %>><%= c.title %></option>
-                        <% }) %>
-                    </select>
-                </form>
-            </div>
+  <nav class="zj-navbar">
+    <a href="/contests" class="zj-logo">
+      <span class="zj-logo-dot"></span>
+      Zarzma Judge
+    </a>
+    <a href="/contests" class="btn-zj btn-zj-ghost btn-zj-sm">← კონტესტები</a>
+  </nav>
 
-            <% if (selectedContest) { %>
-                <h4 class="fw-bold text-primary mb-3">კონტესტი: <%= selectedContest.title %></h4>
-                <div class="table-responsive">
-                    <table class="table table-bordered table-hover shadow-sm align-middle">
-                        <thead>
-                            <tr>
-                                <th style="width: 60px;">Rank</th>
-                                <th style="text-align: left; padding-left: 15px;">User (Name / Email)</th>
-                                <% selectedContest.tasks.forEach(task => { %>
-                                    <th class="task-col"><%= task %></th>
-                                <% }) %>
-                                <th class="total-col">Total Score</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <% if (typeof usersData !== 'undefined' && usersData.length > 0) { %>
-                                <% 
-                                    // დავთვალოთ თითოეულის ჯამური ქულა სორტირებისთვის
-                                    usersData.forEach(user => {
-                                        let total = 0;
-                                        selectedContest.tasks.forEach(task => {
-                                            let sub = user.submissions && user.submissions.find(s => String(s.taskName).trim() === String(task).trim());
-                                            total += sub ? Number(sub.points || 0) : 0;
-                                        });
-                                        user.computedTotal = total;
-                                    });
+  <div style="max-width: 1100px; margin: 0 auto; padding: 32px 24px;">
 
-                                    // დავასორტიროთ ქულების მიხედვით კლებადობით
-                                    usersData.sort((a, b) => b.computedTotal - a.computedTotal);
-                                %>
-                                
-                                <% usersData.forEach((user, index) => { %>
-                                    <tr>
-                                        <td class="fw-bold text-muted"><%= index + 1 %></td>
-                                        <td style="text-align: left; padding-left: 15px;">
-                                            <div class="fw-bold text-dark"><%= user.name || 'სტუდენტი' %></div>
-                                            <div class="text-muted small"><%= user.email %></div>
-                                        </td>
-                                        
-                                        <% selectedContest.tasks.forEach(task => { %>
-                                            <% 
-                                                // ვეძებთ ბოლო ან საუკეთესო გაგზავნას ამ ამოცანაზე
-                                                let sub = user.submissions && user.submissions.find(s => String(s.taskName).trim() === String(task).trim());
-                                                let points = sub ? sub.points : '-';
-                                                let isMax = points === 100;
-                                            %>
-                                            <td class="fw-bold <%= isMax ? 'text-success fs-5' : (points > 0 ? 'text-warning' : 'text-secondary') %>">
-                                                <%= points %>
-                                            </td>
-                                        <% }) %>
-                                        
-                                        <td class="total-col fs-5"><%= user.computedTotal %></td>
-                                    </tr>
-                                <% }) %>
-                            <% } else { %>
-                                <tr>
-                                    <td colspan="<%= selectedContest.tasks.length + 3 %>" class="text-center py-4 text-muted">ამ კონტესტში მონაწილეები ჯერ არ გვყავს.</td>
-                                </tr>
-                            <% } %>
-                        </tbody>
-                    </table>
-                </div>
-            <% } else { %>
-                <div class="text-center py-5 text-muted">გთხოვთ აირჩიოთ კონტესტი ზემოთ მოცემული სიიდან შედეგების სანახავად.</div>
-            <% } %>
-        </div>
+    <div class="flex-between mb-4">
+      <h2 style="font-size: 20px;">Scoreboard</h2>
     </div>
+
+    <!-- Contest selector -->
+    <div class="card-zj mb-4" style="padding: 16px 20px;">
+      <form action="/admin/scoreboard" method="GET" id="contestForm" class="form-zj" style="margin: 0;">
+        <label>კონტესტის არჩევა</label>
+        <select name="contestId" onchange="document.getElementById('contestForm').submit()"
+                style="max-width: 420px;">
+          <option value="">-- აირჩიე კონტესტი --</option>
+          <% contests.forEach(c => { %>
+            <option value="<%= c.id %>" <%= selectedContest && selectedContest.id === c.id ? 'selected' : '' %>>
+              <%= c.title %>
+            </option>
+          <% }) %>
+        </select>
+      </form>
+    </div>
+
+    <% if (selectedContest) { %>
+
+      <div class="flex-between mb-3">
+        <div>
+          <span class="section-label" style="margin-bottom: 2px;">კონტესტი</span>
+          <h3 style="font-size: 17px;"><%= selectedContest.title %></h3>
+        </div>
+        <span class="badge-zj badge-muted mono"><%= selectedContest.tasks.length %> ამოცანა</span>
+      </div>
+
+      <div class="card-zj" style="padding: 0; overflow-x: auto;">
+        <table class="table-zj" style="min-width: 600px;">
+          <thead>
+            <tr>
+              <th style="width: 50px;">Rank</th>
+              <th>მოსწავლე</th>
+              <% selectedContest.tasks.forEach(task => { %>
+                <th class="center" style="font-family: var(--font-mono); font-size: 11px;"><%= task %></th>
+              <% }) %>
+              <th class="center" style="color: var(--accent);">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (typeof usersData !== 'undefined' && usersData.length > 0) { %>
+              <%
+                usersData.forEach(user => {
+                  let total = 0;
+                  selectedContest.tasks.forEach(task => {
+                    let sub = user.submissions && user.submissions.find(s => String(s.taskName).trim() === String(task).trim());
+                    total += sub ? Number(sub.points || 0) : 0;
+                  });
+                  user.computedTotal = total;
+                });
+                usersData.sort((a, b) => b.computedTotal - a.computedTotal);
+              %>
+
+              <% usersData.forEach((user, index) => { %>
+              <tr>
+                <td>
+                  <span class="rank-num <%= index === 0 ? 'rank-1' : (index === 1 ? 'rank-2' : (index === 2 ? 'rank-3' : '')) %>">
+                    <%= index + 1 %>
+                  </span>
+                </td>
+                <td>
+                  <div style="font-weight: 600; font-size: 13px;"><%= user.name || 'Student' %></div>
+                  <div style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);"><%= user.email %></div>
+                </td>
+                <% selectedContest.tasks.forEach(task => {
+                     let sub = user.submissions && user.submissions.find(s => String(s.taskName).trim() === String(task).trim());
+                     let pts = sub ? sub.points : null;
+                %>
+                  <td class="center">
+                    <% if (pts === null) { %>
+                      <span style="color: var(--text-muted); font-family: var(--font-mono);">—</span>
+                    <% } else { %>
+                      <span class="score-val <%= pts == 100 ? 'score-100' : (pts > 0 ? 'score-mid' : 'score-zero') %>">
+                        <%= pts %>
+                      </span>
+                    <% } %>
+                  </td>
+                <% }) %>
+                <td class="center">
+                  <span style="font-family: var(--font-mono); font-weight: 700; font-size: 16px; color: var(--accent);">
+                    <%= user.computedTotal %>
+                  </span>
+                </td>
+              </tr>
+              <% }) %>
+
+            <% } else { %>
+              <tr>
+                <td colspan="<%= selectedContest.tasks.length + 3 %>"
+                    style="text-align: center; padding: 40px; color: var(--text-muted);">
+                  ამ კონტესტში მონაწილეები ჯერ არ გვყავს.
+                </td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+
+    <% } else { %>
+      <div class="card-zj" style="text-align: center; padding: 56px 24px;">
+        <p style="color: var(--text-muted);">გთხოვთ აირჩიოთ კონტესტი სქორბორდის სანახავად.</p>
+      </div>
+    <% } %>
+
+  </div>
 </body>
 </html>

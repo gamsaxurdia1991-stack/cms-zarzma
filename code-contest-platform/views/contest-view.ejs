@@ -1,333 +1,364 @@
 <!DOCTYPE html>
 <html lang="ka">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= (contest && contest.title) ? contest.title : 'Contest' %></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <style>
-        body { font-family: system-ui, sans-serif; display: flex; height: 100vh; overflow: hidden; margin:0; background-color: #f8f9fa; }
-        
-        /* Sidebar Styling */
-        .sidebar { width: 260px; background-color: #ffffff; border-right: 1px solid #dee2e6; display: flex; flex-direction: column; justify-content: space-between; padding: 15px 0; z-index: 100; }
-        .sidebar-menu a { display: block; padding: 10px 20px; color: #495057; text-decoration: none; font-size: 14px; transition: 0.2s; }
-        .sidebar-menu a:hover { background-color: #f1f3f5; color: #0d6efd; }
-        .sidebar-menu a.active { background-color: #e7f1ff; color: #0d6efd; font-weight: 600; border-right: 3px solid #0d6efd; }
-        
-        /* Content Area Styling */
-        .content-area { flex: 1; padding: 40px; overflow-y: auto; background-color: #ffffff; }
-        
-        /* Components */
-        .task-header { font-size: 11px; font-weight: 800; color: #adb5bd; padding: 15px 20px 5px 20px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .timer-badge { font-size: 18px; font-weight: 700; background: #212529; color: #ffc107; padding: 10px; border-radius: 6px; text-align: center; margin: 0 15px 20px 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-family: monospace; }
-        
-        /* CMS Styled Details Table */
-        .cms-table { max-width: 800px; width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 30px; font-size: 15px; }
-        .cms-table td { padding: 8px 12px; border: 1px solid #dee2e6; }
-        .cms-table td:first-child { font-weight: bold; width: 200px; background-color: #fcfcfc; }
-        
-        /* Markdown / Text Formatting */
-        .statement-box img { max-width: 100%; height: auto; border-radius: 4px; }
-        .statement-box pre { background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef; font-family: 'Courier New', Courier, monospace; }
-        .limit-badge { font-size: 12px; padding: 4px 10px; background: #f1f3f5; color: #495057; border-radius: 4px; border: 1px solid #dee2e6; font-weight: 600; }
-        
-        /* CMS Status Text Colors */
-        .status-text { font-weight: bold; }
-        .status-ac { color: #2ca02c; } /* მწვანე */
-        .status-err { color: #cd3d4d; } /* CMS წითელი */
-        
-        /* CMS Details Link (როგორც ფოტოზეა) */
-        .cms-details-link { font-size: 13px; color: #0088cc; text-decoration: none; margin-left: 6px; font-weight: normal; }
-        .cms-details-link:hover { text-decoration: underline; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= (contest && contest.title) ? contest.title : 'Contest' %> — Zarzma Judge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/public/style.css">
 </head>
-<body>
+<body style="display: flex; flex-direction: column; height: 100vh; overflow: hidden;">
 
-    <div class="sidebar">
-        <div class="sidebar-menu w-100">
-            <div class="px-3 mb-3">
-                <h5 class="fw-bold text-dark text-truncate m-0" title="<%= contest.title %>"><%= contest.title %></h5>
-            </div>
-            
-            <div class="timer-badge" id="timer">00:00:00</div>
-
-            <a href="/contest/<%= contest.id %>" class="<%= !currentTask && viewType !== 'all-submissions' ? 'active' : '' %>">
-                🏠 Overview
-            </a>
-            <a href="/contest/<%= contest.id %>?view=all-submissions" class="<%= viewType === 'all-submissions' ? 'active' : '' %>">
-                📝 My Submissions
-            </a>
-            <a href="/communication?contestId=<%= contest.id %>">
-                💬 Communication
-            </a>
-            
-            <hr class="mx-3 my-3">
-            
-            <% contest.tasks.forEach(task => { %>
-                <div class="task-header"><%= task %></div>
-                <a href="/contest/<%= contest.id %>?task=<%= encodeURIComponent(task) %>&view=statement" class="ps-4 <%= currentTask === task && viewType === 'statement' ? 'active' : '' %>">
-                    📄 Statement
-                </a>
-                <a href="/contest/<%= contest.id %>?task=<%= encodeURIComponent(task) %>&view=submissions" class="ps-4 <%= currentTask === task && viewType === 'submissions' ? 'active' : '' %>">
-                    📊 Submissions
-                </a>
-            <% }) %>
-        </div>
-        
-        <div class="px-3 w-100">
-            <hr>
-            <a href="/contests" class="btn btn-outline-secondary btn-sm w-100 fw-bold py-2">⬅️ Back to List</a>
-        </div>
+  <!-- ── Navbar ── -->
+  <nav class="zj-navbar">
+    <a href="/contests" class="zj-logo">
+      <span class="zj-logo-dot"></span>
+      Zarzma Judge
+    </a>
+    <div class="zj-nav-right">
+      <span class="badge-zj badge-muted mono"><%= role %></span>
     </div>
+  </nav>
 
-    <div class="content-area">
-        
-        <% if (viewType === 'all-submissions') { %>
-            <h3 class="fw-bold mb-4">ჩემი ყველა გაგზავნილი კოდი</h3>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle border shadow-sm" style="background: white;">
-                    <thead class="table-dark">
-                        <tr><th>გაგზავნის დრო</th><th>ამოცანა</th><th>სტატუსი</th><th>ქულა</th></tr>
-                    </thead>
-                    <tbody>
-                        <% if (typeof submissions !== 'undefined' && submissions.length > 0) { %>
-                            <% submissions.reverse().forEach(s => { %>
-                                <tr>
-                                    <td class="text-muted small fw-bold">
-                                        <a href="/submission/<%= s.id %>" class="text-decoration-none text-muted"><%= s.time %></a>
-                                    </td>
-                                    <td class="fw-bold"><%= s.taskName %></td>
-                                    <td>
-                                        <% 
-                                            let statusClass = s.status.includes('Accepted') ? 'status-ac' : 'status-err';
-                                        %>
-                                        <span class="status-text <%= statusClass %>"><%= s.status %></span>
-                                        <a href="/submission/<%= s.id %>" class="cms-details-link">(details)</a>
-                                    </td>
-                                    <td class="fw-bold fs-5">
-                                        <a href="/submission/<%= s.id %>" class="text-decoration-none text-dark"><%= s.points %></a>
-                                    </td>
-                                </tr>
-                            <% }) %>
-                        <% } else { %>
-                            <tr><td colspan="4" class="text-center py-4 text-muted">ჯერ არცერთი კოდი არ გაგიგზავნიათ.</td></tr>
-                        <% } %>
-                    </tbody>
-                </table>
+  <!-- ── Body: sidebar + content ── -->
+  <div style="display: flex; flex: 1; overflow: hidden;">
+
+    <!-- Sidebar -->
+    <aside class="zj-sidebar">
+      <div style="padding: 16px 12px 8px;">
+        <div style="font-size: 15px; font-weight: 800; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+          <%= contest.title %>
+        </div>
+      </div>
+
+      <!-- Timer -->
+      <div class="zj-timer" id="timer">00:00:00</div>
+
+      <!-- Nav -->
+      <a href="/contest/<%= contest.id %>"
+         class="zj-sidebar-link <%= !currentTask && viewType !== 'all-submissions' ? 'active' : '' %>">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+        Overview
+      </a>
+      <a href="/contest/<%= contest.id %>?view=all-submissions"
+         class="zj-sidebar-link <%= viewType === 'all-submissions' ? 'active' : '' %>">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+        </svg>
+        My Submissions
+      </a>
+      <a href="/communication?contestId=<%= contest.id %>"
+         class="zj-sidebar-link">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+        </svg>
+        Communication
+      </a>
+
+      <div class="divider" style="margin: 10px 12px;"></div>
+
+      <!-- Tasks -->
+      <% contest.tasks.forEach(task => { %>
+        <div class="zj-sidebar-task-name"><%= task %></div>
+        <a href="/contest/<%= contest.id %>?task=<%= encodeURIComponent(task) %>&view=statement"
+           class="zj-sidebar-link ps-4 <%= currentTask === task && viewType === 'statement' ? 'active' : '' %>"
+           style="padding-left: 24px; font-size: 12px;">
+          Statement
+        </a>
+        <a href="/contest/<%= contest.id %>?task=<%= encodeURIComponent(task) %>&view=submissions"
+           class="zj-sidebar-link ps-4 <%= currentTask === task && viewType === 'submissions' ? 'active' : '' %>"
+           style="padding-left: 24px; font-size: 12px;">
+          Submissions
+        </a>
+      <% }) %>
+
+      <!-- Bottom back link -->
+      <div style="margin-top: auto; padding: 12px;">
+        <a href="/contests" class="btn-zj btn-zj-ghost w-100" style="justify-content: center;">
+          ← კონტესტების სია
+        </a>
+      </div>
+    </aside>
+
+    <!-- ── Content ── -->
+    <main class="zj-content" style="overflow-y: auto; height: 100%;">
+
+      <!-- ======================== ALL SUBMISSIONS ======================== -->
+      <% if (viewType === 'all-submissions') { %>
+
+        <h2 style="font-size: 18px; margin-bottom: 20px;">ჩემი ყველა გაგზავნილი</h2>
+        <div class="card-zj" style="padding: 0; overflow: hidden;">
+          <table class="table-zj">
+            <thead>
+              <tr>
+                <th>დრო</th>
+                <th>ამოცანა</th>
+                <th>სტატუსი</th>
+                <th class="center">ქულა</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (typeof submissions !== 'undefined' && submissions.length > 0) { %>
+                <% submissions.slice().reverse().forEach(s => { %>
+                  <tr>
+                    <td>
+                      <a href="/submission/<%= s.id %>" style="color: var(--text-muted); text-decoration:none; font-family: var(--font-mono); font-size: 12px;">
+                        <%= s.time %>
+                      </a>
+                    </td>
+                    <td><span class="badge-zj badge-info mono"><%= s.taskName %></span></td>
+                    <td>
+                      <span class="<%= s.status.includes('Accepted') ? 'status-ac' : 'status-err' %>">
+                        <%= s.status %>
+                      </span>
+                      <a href="/submission/<%= s.id %>" style="font-size:11px; color: var(--text-muted); margin-left: 6px;">(details)</a>
+                    </td>
+                    <td class="center">
+                      <span class="score-val <%= s.points == 100 ? 'score-100' : (s.points > 0 ? 'score-mid' : 'score-zero') %>">
+                        <%= s.points %>
+                      </span>
+                    </td>
+                  </tr>
+                <% }) %>
+              <% } else { %>
+                <tr><td colspan="4" style="text-align:center; padding: 32px; color: var(--text-muted);">ჯერ არცერთი კოდი გაგზავნილი არ არის.</td></tr>
+              <% } %>
+            </tbody>
+          </table>
+        </div>
+
+      <!-- ======================== TASK VIEW ======================== -->
+      <% } else if (currentTask) { %>
+
+        <!-- Tabs -->
+        <div class="nav-tabs-zj">
+          <a href="/contest/<%= contest.id %>?task=<%= encodeURIComponent(currentTask) %>&view=statement"
+             class="nav-tab-zj <%= viewType === 'statement' ? 'active' : '' %>">Statement</a>
+          <a href="/contest/<%= contest.id %>?task=<%= encodeURIComponent(currentTask) %>&view=submissions"
+             class="nav-tab-zj <%= viewType === 'submissions' ? 'active' : '' %>">Submit & History</a>
+        </div>
+
+        <!-- ── Statement ── -->
+        <% if (viewType === 'statement') { %>
+
+          <div class="flex-between mb-4">
+            <div>
+              <h1 style="font-size: 32px; font-family: var(--font-mono); font-weight: 700; margin-bottom: 4px;">
+                <%= currentTask %>
+              </h1>
+              <span style="color: var(--text-muted); font-size: 13px;">description</span>
             </div>
-
-        <% } else if (currentTask) { %>
-            
-            <div class="mb-4">
-                <ul class="nav nav-tabs">
-                    <li class="nav-item">
-                        <a class="nav-link <%= viewType === 'statement' ? 'active fw-bold text-dark' : 'text-secondary' %>" href="/contest/<%= contest.id %>?task=<%= encodeURIComponent(currentTask) %>&view=statement">Statement</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link <%= viewType === 'submissions' ? 'active fw-bold text-dark' : 'text-secondary' %>" href="/contest/<%= contest.id %>?task=<%= encodeURIComponent(currentTask) %>&view=submissions">Submissions</a>
-                    </li>
-                </ul>
-            </div>
-
-            <% if (viewType === 'statement') { %>
-                <div class="mb-3">
-                    <h1 class="fw-bold d-inline-block m-0" style="font-size: 38px;"><%= currentTask %></h1>
-                    <span class="text-muted ms-2 fs-5">description</span>
-                </div>
-                
-                <h3 class="fw-normal text-secondary mt-4 mb-3">Statement</h3>
-                
-                <% if (typeof pdfUrl !== 'undefined' && pdfUrl) { %>
-                    <div class="mb-4">
-                        <a href="<%= pdfUrl %>" download class="btn btn-success fw-semibold px-4 py-2" style="background-color: #5cb85c; border-color: #4cae4c;">
-                            Download task statement
-                        </a>
-                    </div>
-                <% } %>
-
-                <div class="statement-box mb-5">
-                    <%- taskStatementHtml %>
-                </div>
-
-                <h3 class="fw-normal text-secondary mt-5 mb-3">Some details</h3>
-                <table class="cms-table">
-                    <tbody>
-                        <tr>
-                            <td>Type</td>
-                            <td>Batch</td>
-                        </tr>
-                        <tr>
-                            <td>Time limit</td>
-                            <td><%= (typeof taskLimits !== 'undefined' && taskLimits.timeLimit) ? Number(taskLimits.timeLimit).toFixed(3) : "2.000" %> seconds</td>
-                        </tr>
-                        <tr>
-                            <td>Memory limit</td>
-                            <td><%= (typeof taskLimits !== 'undefined' && taskLimits.memoryLimit) ? taskLimits.memoryLimit : "256" %> MiB</td>
-                        </tr>
-                        <tr>
-                            <td>Remaining Submissions</td>
-                            <td><%= typeof remainingSubmissions !== 'undefined' ? remainingSubmissions : 50 %> / 50</td>
-                        </tr>
-                    </tbody>
-                </table>
-
-            <% } else if (viewType === 'submissions') { %>
-                <div class="card border-primary shadow-sm mb-4" id="submit-card">
-                    <div class="card-header bg-primary text-white fw-bold py-2">SUBMIT SOLUTION (C++)</div>
-                    <div class="card-body p-3">
-                        <% if (typeof remainingSubmissions !== 'undefined' && remainingSubmissions <= 0) { %>
-                            <div class="alert alert-danger m-0">თქვენ ამოგეწურათ ამ ამოცანაზე კოდის გაგზავნის ლიმიტი (მაქსიმუმ 50).</div>
-                        <% } else { %>
-                            <form action="/submit-code" method="POST" enctype="multipart/form-data" class="row g-2">
-                                <input type="hidden" name="contestId" value="<%= contest.id %>">
-                                <input type="hidden" name="taskName" value="<%= currentTask %>">
-                                <div class="col-md-9">
-                                    <input type="file" name="codeFile" class="form-control" accept=".cpp" required id="fileInput">
-                                </div>
-                                <div class="col-md-3">
-                                    <button type="submit" class="btn btn-success w-100 fw-bold" id="submitBtn">🚀 Submit Code</button>
-                                </div>
-                            </form>
-                        <% } %>
-                    </div>
-                </div>
-
-                <div class="table-responsive">
-                    <table class="table align-middle border shadow-sm" style="background: white;">
-                        <thead class="table-light">
-                            <tr>
-                                <th>გაგზავნის დრო</th>
-                                <th>სტატუსი</th>
-                                <th>ქულა</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <% if (typeof submissions !== 'undefined' && submissions.length > 0) { %>
-                                <% submissions.reverse().forEach(s => { %>
-                                    <% if (s.taskName === currentTask) { %>
-                                        <tr>
-                                            <td class="text-muted small fw-bold" style="width: 30%;">
-                                                <a href="/submission/<%= s.id %>" class="text-decoration-none text-muted"><%= s.time %></a>
-                                            </td>
-                                            <td style="width: 50%;">
-                                                <% 
-                                                    let statusClass = s.status.includes('Accepted') ? 'status-ac' : 'status-err';
-                                                %>
-                                                <span class="status-text <%= statusClass %>"><%= s.status %></span>
-                                                <a href="/submission/<%= s.id %>" class="cms-details-link">(details)</a>
-                                            </td>
-                                            <td class="fw-bold" style="width: 20%;">
-                                                <a href="/submission/<%= s.id %>" class="text-decoration-none text-dark"><%= s.points %></a>
-                                            </td>
-                                        </tr>
-                                    <% } %>
-                                <% }) %>
-                            <% } else { %>
-                                <tr><td colspan="3" class="text-center py-3 text-muted">ამ ამოცანაზე ისტორია ცარიელია.</td></tr>
-                            <% } %>
-                        </tbody>
-                    </table>
-                </div>
+            <% if (typeof pdfUrl !== 'undefined' && pdfUrl) { %>
+              <a href="<%= pdfUrl %>" download class="btn-zj btn-zj-success">
+                ↓ PDF გადმოწერა
+              </a>
             <% } %>
+          </div>
 
-        <% } else { %>
-            <div class="overview-section">
-                <div class="mb-5">
-                    <h2 class="fw-bold text-dark mb-2">Contest Overview</h2>
-                    <p class="text-muted">კეთილი იყოს თქვენი მობრძანება <b><%= contest.title %></b>-ზე. ქვემოთ მოცემულია ამოცანების სია და ლიმიტები.</p>
-                </div>
-                
-                <h5 class="fw-bold text-secondary small mb-3 text-uppercase">ამოცანების ჩამონათვალი</h5>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle border shadow-sm" style="background: white;">
-                        <thead class="table-light">
-                            <tr class="small fw-bold text-muted">
-                                <th class="ps-3" style="width: 50px;">#</th>
-                                <th>სახელი</th>
-                                <th>დროის ლიმიტი</th>
-                                <th>მეხსიერების ლიმიტი</th>
-                                <th class="text-center">გაგზავნა</th>
-                                <th class="text-center" style="width: 150px;">მოქმედება</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <% contest.tasks.forEach((task, index) => { 
-                                let tData = (contest.tasksData && contest.tasksData.find(t => String(t.name).trim() === String(task).trim())) || null;
-                                let timeLimit = tData ? Number(tData.timeLimit).toFixed(3) + 's' : '2.000s';
-                                let memoryLimit = tData ? tData.memoryLimit + ' MiB' : '256 MiB';
-                            %>
-                                <tr>
-                                    <td class="ps-3 text-muted fw-bold"><%= index + 1 %></td>
-                                    <td class="fw-bold text-dark fs-5"><%= task %></td>
-                                    <td><span class="badge bg-light text-dark border"><%= timeLimit %></span></td>
-                                    <td><span class="badge bg-light text-dark border"><%= memoryLimit %></span></td>
-                                    <td class="text-center text-muted">მაქს. 50</td>
-                                    <td class="text-center">
-                                        <a href="/contest/<%= contest.id %>?task=<%= encodeURIComponent(task) %>&view=statement" class="btn btn-sm btn-primary fw-bold px-3">გახსნა</a>
-                                    </td>
-                                </tr>
-                            <% }) %>
-                        </tbody>
-                    </table>
-                </div>
+          <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 28px; margin-bottom: 28px; line-height: 1.7; color: var(--text-primary);">
+            <%- taskStatementHtml %>
+          </div>
 
-                <div class="alert alert-info mt-5 border-0 shadow-sm">
-                    <h6 class="fw-bold">💡 წესები და მითითებები:</h6>
-                    <ul class="m-0 small">
-                        <li>თითოეულ ამოცანაზე გაქვთ მაქსიმუმ 50 მცდელობა.</li>
-                        <li>კოდი უნდა იყოს დაწერილი C++ ენაზე.</li>
-                        <li>დროის ამოწურვის შემდეგ სისტემა ავტომატურად დაიბლოკება სტანდარტული იუზერებისთვის.</li>
-                        <li>კითხვების შემთხვევაში გამოიყენეთ Communication სექცია.</li>
-                    </ul>
-                </div>
+          <p class="section-label">Task Details</p>
+          <table class="details-table mb-4">
+            <tr>
+              <td>type</td>
+              <td style="color: var(--text-primary);">Batch</td>
+            </tr>
+            <tr>
+              <td>time limit</td>
+              <td style="color: var(--text-primary);">
+                <span class="mono"><%= (typeof taskLimits !== 'undefined' && taskLimits.timeLimit) ? Number(taskLimits.timeLimit).toFixed(3) : "2.000" %> s</span>
+              </td>
+            </tr>
+            <tr>
+              <td>memory limit</td>
+              <td style="color: var(--text-primary);">
+                <span class="mono"><%= (typeof taskLimits !== 'undefined' && taskLimits.memoryLimit) ? taskLimits.memoryLimit : "256" %> MiB</span>
+              </td>
+            </tr>
+            <tr>
+              <td>remaining</td>
+              <td>
+                <span class="mono <%= (typeof remainingSubmissions !== 'undefined' && remainingSubmissions <= 10) ? 'text-red' : 'text-green' %>">
+                  <%= typeof remainingSubmissions !== 'undefined' ? remainingSubmissions : 50 %> / 50
+                </span>
+              </td>
+            </tr>
+          </table>
+
+        <!-- ── Submissions ── -->
+        <% } else if (viewType === 'submissions') { %>
+
+          <!-- Submit card -->
+          <div class="card-zj mb-4">
+            <div class="card-header-zj">
+              <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-muted);">
+                Submit Solution — C++
+              </span>
+              <span class="badge-zj <%= (typeof remainingSubmissions !== 'undefined' && remainingSubmissions <= 10) ? 'badge-err' : 'badge-muted' %> mono">
+                <%= typeof remainingSubmissions !== 'undefined' ? remainingSubmissions : 50 %> / 50 remaining
+              </span>
             </div>
+
+            <% if (typeof remainingSubmissions !== 'undefined' && remainingSubmissions <= 0) { %>
+              <div class="alert-zj alert-zj-danger">
+                მცდელობების ლიმიტი ამოიწურა (მაქსიმუმ 50).
+              </div>
+            <% } else { %>
+              <form action="/submit-code" method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="contestId" value="<%= contest.id %>">
+                <input type="hidden" name="taskName"  value="<%= currentTask %>">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <input type="file" name="codeFile" accept=".cpp" required id="fileInput"
+                         style="flex: 1; background: var(--bg-input); border: 1px solid var(--border-mid); border-radius: var(--radius-md); padding: 8px 12px; color: var(--text-primary); font-size: 13px;">
+                  <button type="submit" class="btn-zj btn-zj-success" id="submitBtn">
+                    → Submit
+                  </button>
+                </div>
+              </form>
+            <% } %>
+          </div>
+
+          <!-- History table -->
+          <div class="card-zj" style="padding: 0; overflow: hidden;">
+            <table class="table-zj">
+              <thead>
+                <tr>
+                  <th>გაგზავნის დრო</th>
+                  <th>სტატუსი</th>
+                  <th class="center">ქულა</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% if (typeof submissions !== 'undefined' && submissions.filter(s => s.taskName === currentTask).length > 0) { %>
+                  <% submissions.slice().reverse().forEach(s => { %>
+                    <% if (s.taskName === currentTask) { %>
+                    <tr>
+                      <td>
+                        <a href="/submission/<%= s.id %>" style="color: var(--text-muted); text-decoration:none; font-family: var(--font-mono); font-size: 12px;">
+                          <%= s.time %>
+                        </a>
+                      </td>
+                      <td>
+                        <span class="<%= s.status.includes('Accepted') ? 'status-ac' : 'status-err' %>">
+                          <%= s.status %>
+                        </span>
+                        <a href="/submission/<%= s.id %>" style="font-size:11px; color: var(--text-muted); margin-left: 6px;">(details)</a>
+                      </td>
+                      <td class="center">
+                        <span class="score-val <%= s.points == 100 ? 'score-100' : (s.points > 0 ? 'score-mid' : 'score-zero') %>">
+                          <%= s.points %>
+                        </span>
+                      </td>
+                    </tr>
+                    <% } %>
+                  <% }) %>
+                <% } else { %>
+                  <tr><td colspan="3" style="text-align:center; padding: 32px; color: var(--text-muted);">ამ ამოცანაზე ისტორია ცარიელია.</td></tr>
+                <% } %>
+              </tbody>
+            </table>
+          </div>
+
         <% } %>
-    </div>
 
-    <script>
-        let timeLeft = Number("<%= typeof timeLeft !== 'undefined' ? timeLeft : 0 %>");
-        if (isNaN(timeLeft)) timeLeft = 0;
+      <!-- ======================== OVERVIEW ======================== -->
+      <% } else { %>
 
-        const timerDisplay = document.getElementById('timer');
-        const submitBtn = document.getElementById('submitBtn');
-        const fileInput = document.getElementById('fileInput');
+        <div class="mb-4">
+          <h2 style="font-size: 22px; margin-bottom: 6px;"><%= contest.title %></h2>
+          <p style="color: var(--text-muted); font-size: 13px;">
+            კეთილი იყოს თქვენი მობრძანება. ქვემოთ მოცემულია ამოცანების სია.
+          </p>
+        </div>
 
-        function updateTimer() {
-            if (timeLeft <= 0) {
-                if(timerDisplay) {
-                    timerDisplay.innerHTML = "FINISHED (UPSOLVING OPEN)";
-                    timerDisplay.style.color = "#ffc107";
-                }
-                
-                const userRole = "<%= typeof role !== 'undefined' ? role : 'user' %>";
-                if (userRole !== 'admin' && userRole !== 'checker' && userRole !== 'owner') {
-                    if(submitBtn) { 
-                        submitBtn.disabled = true; 
-                        submitBtn.classList.replace('btn-success', 'btn-secondary');
-                        submitBtn.innerText = "Blocked (Contest Ended)"; 
-                    }
-                    if(fileInput) fileInput.disabled = true;
-                }
-                return;
-            }
-            
-            let hours = Math.floor(timeLeft / 3600000);
-            let minutes = Math.floor((timeLeft % 3600000) / 60000);
-            let seconds = Math.floor((timeLeft % 60000) / 1000);
-            
-            if(timerDisplay) {
-                timerDisplay.innerHTML = 
-                    (hours < 10 ? "0" : "") + hours + ":" + 
-                    (minutes < 10 ? "0" : "") + minutes + ":" + 
-                    (seconds < 10 ? "0" : "") + seconds;
-            }
-            
-            timeLeft -= 1000;
+        <div class="card-zj" style="padding: 0; overflow: hidden; margin-bottom: 24px;">
+          <table class="table-zj">
+            <thead>
+              <tr>
+                <th style="width: 44px;">#</th>
+                <th>ამოცანა</th>
+                <th>Time Limit</th>
+                <th>Memory</th>
+                <th class="center">მცდელობები</th>
+                <th class="center">გახსნა</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% contest.tasks.forEach((task, i) => {
+                   let tData = (contest.tasksData && contest.tasksData.find(t => String(t.name).trim() === String(task).trim())) || null;
+                   let tl = tData ? Number(tData.timeLimit).toFixed(3)+'s' : '2.000s';
+                   let ml = tData ? tData.memoryLimit+' MiB' : '256 MiB';
+              %>
+              <tr>
+                <td style="color: var(--text-muted); font-family: var(--font-mono); font-size: 12px;"><%= i+1 %></td>
+                <td style="font-weight: 700; font-size: 15px; font-family: var(--font-mono);"><%= task %></td>
+                <td><span class="badge-zj badge-muted mono"><%= tl %></span></td>
+                <td><span class="badge-zj badge-muted mono"><%= ml %></span></td>
+                <td class="center" style="color: var(--text-muted); font-family: var(--font-mono); font-size: 12px;">50</td>
+                <td class="center">
+                  <a href="/contest/<%= contest.id %>?task=<%= encodeURIComponent(task) %>&view=statement"
+                     class="btn-zj btn-zj-primary btn-zj-sm">გახსნა</a>
+                </td>
+              </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="alert-zj alert-zj-info">
+          <strong style="display:block; margin-bottom: 6px;">წესები:</strong>
+          <ul style="margin: 0; padding-left: 16px;">
+            <li>თითოეულ ამოცანაზე გაქვთ მაქსიმუმ 50 მცდელობა.</li>
+            <li>კოდი უნდა იყოს დაწერილი C++ ენაზე.</li>
+            <li>დროის ამოწურვის შემდეგ სისტემა ავტომატურად დაიბლოკება.</li>
+            <li>კითხვების შემთხვევაში გამოიყენეთ Communication სექცია.</li>
+          </ul>
+        </div>
+
+      <% } %>
+
+    </main>
+  </div>
+
+  <script>
+    let timeLeft = Number("<%= typeof timeLeft !== 'undefined' ? timeLeft : 0 %>");
+    if (isNaN(timeLeft)) timeLeft = 0;
+
+    const timerEl  = document.getElementById('timer');
+    const submitBtn = document.getElementById('submitBtn');
+    const fileInput = document.getElementById('fileInput');
+
+    function updateTimer() {
+      if (timeLeft <= 0) {
+        if (timerEl) {
+          timerEl.textContent = 'FINISHED';
+          timerEl.classList.add('finished');
         }
-        
-        setInterval(updateTimer, 1000);
-        updateTimer();
-    </script>
+        const role = "<%= typeof role !== 'undefined' ? role : 'user' %>";
+        if (role !== 'admin' && role !== 'checker' && role !== 'owner') {
+          if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Blocked'; }
+          if (fileInput) fileInput.disabled = true;
+        }
+        return;
+      }
+      let h = Math.floor(timeLeft / 3600000);
+      let m = Math.floor((timeLeft % 3600000) / 60000);
+      let s = Math.floor((timeLeft % 60000) / 1000);
+      if (timerEl) {
+        timerEl.textContent =
+          (h < 10 ? '0' : '') + h + ':' +
+          (m < 10 ? '0' : '') + m + ':' +
+          (s < 10 ? '0' : '') + s;
+      }
+      timeLeft -= 1000;
+    }
+    setInterval(updateTimer, 1000);
+    updateTimer();
+  </script>
 </body>
 </html>

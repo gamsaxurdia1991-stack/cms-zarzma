@@ -1,48 +1,66 @@
 <!DOCTYPE html>
 <html lang="ka">
 <head>
-    <meta charset="UTF-8">
-    <title>Configure Contest</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configure — Zarzma Judge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/public/style.css">
 </head>
-<body class="bg-light py-5">
-    <div class="container" style="max-width: 600px;">
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-dark text-white fw-bold">🔧 Contest Configuration: <%= contest.title %></div>
-            <div class="card-body p-4">
-                <form action="/admin/configure-contest/<%= contest.id %>" method="POST">
-                    
-                    <div class="mb-4">
-                        <label class="form-label fw-bold small text-secondary">CONTEST DURATION (MINUTES)</label>
-                        <input type="number" name="duration" class="form-control" value="<%= contest.duration %>" required min="1">
-                        <div class="form-text small text-muted">შეგიძლიათ ნებისმიერ დროს გაზარდოთ ან შეამციროთ კონტესტის დრო.</div>
-                    </div>
+<body>
 
-                    <hr>
+  <nav class="zj-navbar">
+    <a href="/contests" class="zj-logo">
+      <span class="zj-logo-dot"></span>
+      Zarzma Judge
+    </a>
+    <a href="/contests" class="btn-zj btn-zj-ghost btn-zj-sm">← კონტესტები</a>
+  </nav>
 
-                    <h6 class="fw-bold text-primary mt-3 mb-3">🔒 ALLOWED LIST (UPSOLVING CREDENTIALS)</h6>
-                    
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Allowed Username / Email</label>
-                        <input type="text" name="allowedUser" class="form-control" value="<%= contest.allowedUser || 'checker' %>" required>
-                    </div>
+  <div style="max-width: 560px; margin: 0 auto; padding: 32px 24px;">
 
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Allowed Password</label>
-                        <input type="text" name="allowedPassword" class="form-control" value="<%= contest.allowedPassword || 'checker' %>" required>
-                    </div>
-                    
-                    <div class="alert alert-warning small border-0 p-2">
-                        💡 კონტესტის ძირითადი დროის ამოწურვის შემდეგ, ამ იუზერით შესული ხალხი მაინც შეძლებს ამოცანების თავისუფლად გატარებას!
-                    </div>
-
-                    <div class="d-flex gap-2 mt-4">
-                        <button type="submit" class="btn btn-success fw-bold flex-grow-1">Save Configuration</button>
-                        <a href="/contests" class="btn btn-secondary fw-bold px-4">Cancel</a>
-                    </div>
-                </form>
-            </div>
-        </div>
+    <div class="mb-4">
+      <p class="section-label mb-1">კონფიგურაცია</p>
+      <h2 style="font-size: 18px;"><%= contest.title %></h2>
     </div>
+
+    <form action="/admin/configure-contest/<%= contest.id %>" method="POST" class="form-zj">
+
+      <div class="card-zj mb-3">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label>კონტესტის ხანგრძლივობა (წუთი)</label>
+          <input type="number" name="duration" value="<%= contest.duration %>" required min="1"
+                 style="max-width: 200px;">
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 6px;">
+            ნებისმიერ დროს შეიძლება გაზრდა ან შემცირება.
+          </p>
+        </div>
+      </div>
+
+      <div class="card-zj mb-3">
+        <p class="section-label mb-3">Upsolving Access</p>
+
+        <div class="form-group">
+          <label>Username / Email</label>
+          <input type="text" name="allowedUser" value="<%= contest.allowedUser || 'checker' %>" required>
+        </div>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label>Password</label>
+          <input type="text" name="allowedPassword" value="<%= contest.allowedPassword || 'checker' %>" required>
+        </div>
+
+        <div class="alert-zj alert-zj-warning" style="font-size: 12px;">
+          კონტესტის დროის ამოწურვის შემდეგ ამ ანგარიშით შესული მომხმარებლები მაინც შეძლებენ ამოცანების გადაჭრას.
+        </div>
+      </div>
+
+      <div class="flex flex-center gap-2">
+        <button type="submit" class="btn-zj btn-zj-primary">შენახვა</button>
+        <a href="/contests" class="btn-zj btn-zj-ghost">გაუქმება</a>
+      </div>
+    </form>
+
+  </div>
 </body>
 </html>

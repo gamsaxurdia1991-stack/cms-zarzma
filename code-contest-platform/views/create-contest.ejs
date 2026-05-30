@@ -1,104 +1,135 @@
 <!DOCTYPE html>
 <html lang="ka">
 <head>
-    <meta charset="UTF-8">
-    <title>Create Contest</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background-color: #f4f6f9; font-family: system-ui, sans-serif; }
-        .task-block { background: #fff; border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; margin-bottom: 15px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>კონტესტის შექმნა — Zarzma Judge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/public/style.css">
 </head>
 <body>
-    <div class="container my-5" style="max-width: 800px;">
-        <div class="card shadow-sm p-4">
-            <h3 class="fw-bold text-dark mb-4">➕ ახალი კონტესტის შექმნა</h3>
-            
-            <form action="/admin/create-contest" method="POST" enctype="multipart/form-data">
-                
-                <div class="mb-3">
-                    <label class="form-label fw-bold">კონტესტის დასახელება</label>
-                    <input type="text" name="title" class="form-control" required placeholder="მაგ: შიდა შესარჩევი ტური">
-                </div>
-                
-                <div class="mb-4">
-                    <label class="form-label fw-bold">ხანგრძლივობა (წუთებში)</label>
-                    <input type="number" name="duration" class="form-control" value="180" required>
-                </div>
 
-                <hr>
-                <h5 class="fw-bold text-secondary mb-3">🧩 ამოცანები (PDF პირობით & ფაილური ტესტებით)</h5>
-                
-                <div id="tasksContainer"></div>
+  <nav class="zj-navbar">
+    <a href="/contests" class="zj-logo">
+      <span class="zj-logo-dot"></span>
+      Zarzma Judge
+    </a>
+    <a href="/contests" class="btn-zj btn-zj-ghost btn-zj-sm">← უკან</a>
+  </nav>
 
-                <button type="button" class="btn btn-outline-primary btn-sm fw-bold mb-4" onclick="addTaskBlock()">➕ ამოცანის დამატება</button>
-                
-                <hr>
-                <div class="d-flex gap-2">
-                    <button type="submit" class="btn btn-success fw-bold px-4">კონტესტის შექმნა</button>
-                    <a href="/contests" class="btn btn-light border fw-bold">უკან დაბრუნება</a>
-                </div>
-            </form>
-        </div>
+  <div style="max-width: 720px; margin: 0 auto; padding: 32px 24px;">
+
+    <div class="mb-4">
+      <h2 style="font-size: 20px; margin-bottom: 4px;">ახალი კონტესტის შექმნა</h2>
+      <p style="color: var(--text-muted); font-size: 13px;">შეავსე ველები და დაამატე ამოცანები PDF-ებით და სატესტო ფაილებით.</p>
     </div>
 
-    <script>
-        let taskCount = 0;
+    <form action="/admin/create-contest" method="POST" enctype="multipart/form-data" class="form-zj">
 
-        function addTaskBlock() {
-            taskCount++;
-            const container = document.getElementById('tasksContainer');
-            
-            const taskHtml = `
-                <div class="task-block shadow-sm" id="task_${taskCount}">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="fw-bold text-primary m-0">ამოცანა #${taskCount}</h6>
-                        <button type="button" class="btn btn-danger btn-sm p-1 px-2 small" onclick="removeTaskBlock(${taskCount})">წაშლა</button>
-                    </div>
-                    
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold">ამოცანის ID (ინგლისურად, მაგ: task_a)</label>
-                            <input type="text" name="taskNames[]" class="form-control form-control-sm" required placeholder="task_a">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label small fw-bold">Time Limit (წმ)</label>
-                            <input type="number" step="0.1" name="taskTimeLimits" class="form-control form-control-sm" value="2.0" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label small fw-bold">Memory Limit (MB)</label>
-                            <input type="number" name="taskMemoryLimits" class="form-control form-control-sm" value="256" required>
-                        </div>
-                    </div>
+      <div class="card-zj mb-3">
+        <div class="form-group">
+          <label>კონტესტის დასახელება</label>
+          <input type="text" name="title" required placeholder="მაგ: შიდა შესარჩევი ტური #1">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label>ხანგრძლივობა (წუთი)</label>
+          <input type="number" name="duration" value="180" required min="1" style="max-width: 200px;">
+        </div>
+      </div>
 
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold text-danger">📄 ატვირთე ამოცანის პირობა (მხოლოდ PDF)</label>
-                        <input type="file" name="taskPdfs" class="form-control form-control-sm" accept="application/pdf" required>
-                    </div>
+      <p class="section-label mb-2">ამოცანები</p>
+      <div id="tasksContainer"></div>
 
-                    <div class="row g-2">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold text-success">📥 სატესტო შეყვანა (Input ფაილები)</label>
-                            <input type="file" name="taskInputs" class="form-control form-control-sm" multiple required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold text-success">📤 სატესტო გამოყვანა (Output ფაილები)</label>
-                            <input type="file" name="taskOutputs" class="form-control form-control-sm" multiple required>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            container.insertAdjacentHTML('beforeend', taskHtml);
-        }
+      <button type="button" onclick="addTask()"
+              class="btn-zj btn-zj-ghost mb-4" style="width: 100%; justify-content: center; border-style: dashed;">
+        + ამოცანის დამატება
+      </button>
 
-        function removeTaskBlock(id) {
-            document.getElementById(`task_${id}`).remove();
-        }
+      <hr class="divider">
 
-        window.onload = function() {
-            addTaskBlock();
-        };
-    </script>
+      <div class="flex flex-center gap-2">
+        <button type="submit" class="btn-zj btn-zj-primary">კონტესტის შექმნა</button>
+        <a href="/contests" class="btn-zj btn-zj-ghost">გაუქმება</a>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    let count = 0;
+
+    function addTask() {
+      count++;
+      const c = document.getElementById('tasksContainer');
+      const div = document.createElement('div');
+      div.className = 'task-block-zj';
+      div.id = 'task_' + count;
+      div.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <span style="font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--accent);">
+            TASK #${count}
+          </span>
+          <button type="button" onclick="removeTask(${count})"
+                  class="btn-zj btn-zj-danger btn-zj-sm">წაშლა</button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 140px 140px; gap: 10px; margin-bottom: 12px;">
+          <div>
+            <label style="display:block; font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">
+              ამოცანის ID
+            </label>
+            <input type="text" name="taskNames[]" required placeholder="task_a"
+                   style="width:100%; padding:9px 12px; background:var(--bg-card); border:1px solid var(--border-mid); border-radius:var(--radius-md); color:var(--text-primary); font-family:var(--font-mono); font-size:13px; outline:none;">
+          </div>
+          <div>
+            <label style="display:block; font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">
+              Time Limit (s)
+            </label>
+            <input type="number" step="0.1" name="taskTimeLimits" value="2.0" required
+                   style="width:100%; padding:9px 12px; background:var(--bg-card); border:1px solid var(--border-mid); border-radius:var(--radius-md); color:var(--text-primary); font-family:var(--font-mono); font-size:13px; outline:none;">
+          </div>
+          <div>
+            <label style="display:block; font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">
+              Memory (MiB)
+            </label>
+            <input type="number" name="taskMemoryLimits" value="256" required
+                   style="width:100%; padding:9px 12px; background:var(--bg-card); border:1px solid var(--border-mid); border-radius:var(--radius-md); color:var(--text-primary); font-family:var(--font-mono); font-size:13px; outline:none;">
+          </div>
+        </div>
+
+        <div style="margin-bottom: 10px;">
+          <label style="display:block; font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">
+            PDF პირობა
+          </label>
+          <input type="file" name="taskPdfs" accept="application/pdf" required
+                 style="width:100%; padding:8px 12px; background:var(--bg-card); border:1px solid var(--border-mid); border-radius:var(--radius-md); color:var(--text-secondary); font-size:12px;">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+            <label style="display:block; font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">
+              Input ფაილები
+            </label>
+            <input type="file" name="taskInputs" multiple required
+                   style="width:100%; padding:8px 12px; background:var(--bg-card); border:1px solid var(--border-mid); border-radius:var(--radius-md); color:var(--text-secondary); font-size:12px;">
+          </div>
+          <div>
+            <label style="display:block; font-size:11px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px;">
+              Output ფაილები
+            </label>
+            <input type="file" name="taskOutputs" multiple required
+                   style="width:100%; padding:8px 12px; background:var(--bg-card); border:1px solid var(--border-mid); border-radius:var(--radius-md); color:var(--text-secondary); font-size:12px;">
+          </div>
+        </div>
+      `;
+      c.appendChild(div);
+    }
+
+    function removeTask(id) {
+      document.getElementById('task_' + id).remove();
+    }
+
+    window.onload = () => addTask();
+  </script>
 </body>
 </html>

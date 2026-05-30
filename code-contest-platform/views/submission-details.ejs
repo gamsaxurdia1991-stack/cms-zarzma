@@ -1,198 +1,134 @@
 <!DOCTYPE html>
 <html lang="ka">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Submission details #<%= sub.id %></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <style>
-        body {
-            background-color: #f4f4f4;
-            font-family: system-ui, -apple-system, sans-serif;
-        }
-        .modal-emulated-container {
-            max-width: 1000px;
-            margin: 40px auto;
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            border: 1px solid #ddd;
-            overflow: hidden;
-        }
-        .modal-emulated-header {
-            background: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
-            padding: 15px 20px;
-        }
-        .modal-emulated-body {
-            padding: 20px;
-        }
-        
-        /* CMS Subtask Rows Styling */
-        .subtask-row {
-            background: #e9ecef;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
-            padding: 10px 15px;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #333;
-        }
-        .subtask-badge {
-            background-color: #4cae4c;
-            color: white;
-            font-weight: bold;
-            border-radius: 20px;
-            padding: 4px 15px;
-            font-family: monospace;
-            font-size: 15px;
-        }
-        .subtask-badge.failed {
-            background-color: #cd3d4d;
-        }
-
-        /* CMS Block Titles */
-        .cms-section-title {
-            font-size: 18px;
-            font-weight: bold;
-            margin-top: 25px;
-            margin-bottom: 12px;
-            color: #222;
-        }
-
-        /* CMS Details Table */
-        .cms-details-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-            background: #fff;
-        }
-        .cms-details-table td {
-            padding: 10px 15px;
-            border: 1px solid #dee2e6;
-            font-size: 14px;
-        }
-        .cms-details-table td:first-child {
-            font-weight: 500;
-            width: 250px;
-            background-color: #fafafa;
-            color: #444;
-        }
-
-        /* Standard Output/Error Gray Boxes */
-        .cms-output-box {
-            background-color: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 4px;
-            min-height: 38px;
-            padding: 8px 15px;
-            font-family: monospace;
-            color: #555;
-            word-break: break-all;
-        }
-
-        /* Code Block Styling */
-        .code-block {
-            background-color: #1e1e1e;
-            color: #d4d4d4;
-            padding: 15px;
-            border-radius: 6px;
-            font-family: 'Courier New', Courier, monospace;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Submission — Zarzma Judge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/public/style.css">
+  <style>
+    .score-display { font-family: var(--font-mono); font-size: 32px; font-weight: 800; }
+    .score-label   { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+    .col-green  { color: var(--green); }
+    .col-yellow { color: var(--yellow); }
+    .col-red    { color: var(--red); }
+  </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="modal-emulated-container">
-        
-        <div class="modal-emulated-header d-flex justify-content-between align-items-center">
-            <h4 class="m-0 fw-bold text-dark" style="font-size: 20px;">Submission details</h4>
-            <a href="/contest/<%= sub.contestId %>?task=<%= encodeURIComponent(sub.taskName) %>&view=submissions" class="btn-close text-decoration-none" aria-label="Close"></a>
-        </div>
+  <nav class="zj-navbar">
+    <a href="/contests" class="zj-logo">
+      <span class="zj-logo-dot"></span>
+      Zarzma Judge
+    </a>
+    <a href="/contest/<%= sub.contestId %>?task=<%= encodeURIComponent(sub.taskName) %>&view=submissions"
+       class="btn-zj btn-zj-ghost btn-zj-sm">← უკან</a>
+  </nav>
 
-        <div class="modal-emulated-body">
-            
-            <div class="subtasks-container">
-                <% if (typeof sub.subtasks !== 'undefined' && sub.subtasks.length > 0) { %>
-                    <% sub.subtasks.forEach((st, idx) => { %>
-                        <div class="subtask-row d-flex justify-content-between align-items-center">
-                            <div>
-                                <i class="bi bi-chevron-right me-2"></i> Subtask <%= st.id || (idx + 1) %>
-                            </div>
-                            <div class="subtask-badge <%= st.points === st.maxPoints ? '' : 'failed' %>">
-                                (<%= st.points %> / <%= st.maxPoints %>)
-                            </div>
-                        </div>
-                    <% }) %>
-                <% } else { %>
-                    <div class="subtask-row d-flex justify-content-between align-items-center">
-                        <div><i class="bi bi-chevron-right me-2"></i> Main Test Suite (Task: <%= sub.taskName %>)</div>
-                        <div class="subtask-badge <%= sub.points === 100 ? '' : 'failed' %>">(<%= sub.points %> / 100)</div>
-                    </div>
-                <% } %>
-            </div>
+  <div style="max-width: 860px; margin: 0 auto; padding: 32px 24px;">
 
-            <div class="cms-section-title">Compilation output</div>
-            <table class="cms-details-table">
-                <tbody>
-                    <tr>
-                        <td>Compilation outcome:</td>
-                        <td class="fw-semibold text-success">
-                            <%= sub.status.includes('Compilation failed') ? 'Compilation failed' : 'Compilation succeeded' %>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>Compilation time:</td>
-                        <td><%= sub.compilationTime || "1.872 sec" %></td>
-                    </tr>
-                    <tr>
-                        <td>Memory used:</td>
-                        <td><%= sub.memoryUsed || "147 MiB" %></td>
-                    </tr>
-                    <tr>
-                        <td>Execution max time:</td>
-                        <td><%= sub.executionTime || "0.000 sec" %></td>
-                    </tr>
-                </tbody>
-            </table>
+    <%
+      var pts        = parseInt(sub.points) || 0;
+      var isAc       = pts === 100;
+      var isPartial  = pts > 0 && pts < 100;
+      var colorClass = isAc ? 'col-green' : (isPartial ? 'col-yellow' : 'col-red');
+      var badgeClass = isAc ? 'badge-ac'  : (isPartial ? 'badge-warn'  : 'badge-err');
+      var scoreLabel = isAc ? '✓ Accepted' : (isPartial ? '~ Partial Credit' : '✗ Not Accepted');
+    %>
 
-            <div class="cms-section-title" style="font-size: 15px; font-weight: 600;">Standard output</div>
-            <div class="cms-output-box mb-3">
-                <%= sub.stdout || "" %>
-            </div>
-
-            <div class="cms-section-title" style="font-size: 15px; font-weight: 600;">Standard error</div>
-            <div class="cms-output-box mb-4">
-                <%= sub.stderr || "" %>
-            </div>
-
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <span class="text-muted small">ამოცანა: <b><%= sub.taskName %></b> | მომხმარებელი: <%= sub.email %></span>
-                <% if (sub.savedFilename) { %>
-                    <a href="/download-code/<%= sub.id %>" class="btn btn-sm btn-outline-success fw-bold">
-                        <i class="bi bi-download me-1"></i> ორიგინალი .cpp ფაილის გადმოწერა
-                    </a>
-                <% } %>
-            </div>
-
-            <div class="card shadow-sm border-0">
-            </div>
-
-        </div>
-        
-        <div class="modal-emulated-header text-end border-top" style="background: #f8f9fa;">
-            <a href="/contest/<%= sub.contestId %>?task=<%= encodeURIComponent(sub.taskName) %>&view=submissions" class="btn btn-sm btn-secondary px-3 py-1 fw-semibold" style="background-color: #e1e1e1; color: #333; border: 1px solid #ccc;">Close</a>
-        </div>
-
+    <!-- Header -->
+    <div class="flex-between mb-4">
+      <div>
+        <p class="section-label mb-1">Submission</p>
+        <h2 style="font-size: 18px; font-family: var(--font-mono);">#<%= sub.id %></h2>
+      </div>
+      <div class="flex flex-center gap-2">
+        <span class="badge-zj badge-info mono"><%= sub.taskName %></span>
+        <span class="badge-zj <%= badgeClass %> mono"><%= pts %> / 100</span>
+      </div>
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Score card -->
+    <div class="card-zj mb-4" style="padding: 20px 24px;">
+      <div class="flex-between">
+        <div>
+          <div class="score-label <%= colorClass %>"><%= scoreLabel %></div>
+          <div style="font-size: 12px; color: var(--text-muted);">Main Test Suite — <%= sub.taskName %></div>
+        </div>
+        <div class="score-display <%= colorClass %>">
+          <%= pts %><span style="font-size: 14px; color: var(--text-muted); font-weight: 400;">/100</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Compilation output -->
+    <p class="section-label mb-2">Compilation output</p>
+    <div class="card-zj mb-4" style="padding: 0; overflow: hidden;">
+      <table class="details-table" style="max-width: 100%; width: 100%;">
+        <tr>
+          <td>Compilation outcome</td>
+          <td>
+            <% if (sub.status && sub.status.includes('Compilation failed')) { %>
+              <span class="col-red" style="font-weight: 700; font-family: var(--font-mono); font-size: 13px;">Compilation failed</span>
+            <% } else { %>
+              <span class="col-green" style="font-weight: 700; font-family: var(--font-mono); font-size: 13px;">Compilation succeeded</span>
+            <% } %>
+          </td>
+        </tr>
+        <tr>
+          <td>Compilation time</td>
+          <td style="font-family: var(--font-mono); font-size: 13px; color: var(--text-primary);"><%= sub.compilationTime || '—' %></td>
+        </tr>
+        <tr>
+          <td>Memory used</td>
+          <td style="font-family: var(--font-mono); font-size: 13px; color: var(--text-primary);"><%= sub.memoryUsed || '147 MiB' %></td>
+        </tr>
+        <tr>
+          <td>Execution max time</td>
+          <td style="font-family: var(--font-mono); font-size: 13px; color: var(--text-primary);"><%= sub.executionTime || '0.000 sec' %></td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Stdout -->
+    <p class="section-label mb-2">Standard output</p>
+    <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-md);
+         padding: 12px 14px; font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary);
+         min-height: 40px; margin-bottom: 16px; word-break: break-all;">
+      <%= sub.stdout || '' %>
+    </div>
+
+    <!-- Stderr -->
+    <p class="section-label mb-2">Standard error</p>
+    <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-md);
+         padding: 12px 14px; font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary);
+         min-height: 40px; margin-bottom: 24px; word-break: break-all;">
+      <%= sub.stderr || '' %>
+    </div>
+
+    <!-- Meta + download -->
+    <div class="flex-between mb-4">
+      <div style="font-size: 12px; color: var(--text-muted);">
+        ამოცანა: <span style="color: var(--text-primary); font-weight: 600;"><%= sub.taskName %></span>
+        &nbsp;·&nbsp;
+        მომხმარებელი: <span style="color: var(--text-primary);"><%= sub.email %></span>
+      </div>
+      <% if (sub.savedFilename) { %>
+        <a href="/download-code/<%= sub.id %>" class="btn-zj btn-zj-success btn-zj-sm">↓ .cpp გადმოწერა</a>
+      <% } %>
+    </div>
+
+    <!-- Source code -->
+    <% if (sub.codeContent) { %>
+      <p class="section-label mb-2">Source code</p>
+      <div style="background: #0d0d10; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; overflow-x: auto;">
+        <pre style="margin: 0; font-family: var(--font-mono); font-size: 13px; color: #e0e0e0;
+             white-space: pre-wrap; word-wrap: break-word; line-height: 1.6;
+             max-height: 520px; overflow-y: auto;"><%= sub.codeContent %></pre>
+      </div>
+    <% } %>
+
+  </div>
 </body>
 </html>

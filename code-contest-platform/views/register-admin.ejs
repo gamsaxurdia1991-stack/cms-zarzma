@@ -1,107 +1,143 @@
 <!DOCTYPE html>
 <html lang="ka">
 <head>
-    <meta charset="UTF-8">
-    <title>Manage Admins - Zarzma Judge</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background-color: #f4f6f9; font-family: system-ui, sans-serif; }
-        .main-box { background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 30px; margin-top: 40px; border: 1px solid #eef2f5; }
-        .status-badge { font-size: 12px; padding: 4px 8px; border-radius: 20px; font-weight: bold; }
-        .online { background-color: #d1e7dd; color: #0f5132; }
-        .offline { background-color: #f8d7da; color: #842029; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ადმინები — Zarzma Judge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/public/style.css">
 </head>
 <body>
 
-    <div class="container" style="max-width: 950px;">
-        <div class="main-box">
-            
-            <div class="d-flex justify-content-between align-items-center mb-4 pb-2 border-bottom">
-                <h3 class="fw-bold text-dark m-0">👑 Admin Management Panel</h3>
-                <a href="/contests" class="btn btn-outline-secondary btn-sm fw-bold">⬅️ Back to Dashboard</a>
-            </div>
+  <nav class="zj-navbar">
+    <a href="/contests" class="zj-logo">
+      <span class="zj-logo-dot"></span>
+      Zarzma Judge
+    </a>
+    <a href="/contests" class="btn-zj btn-zj-ghost btn-zj-sm">← Dashboard</a>
+  </nav>
 
-            <div class="row g-4">
-                
-                <% if (currentRole === 'owner') { %>
-                    <div class="col-md-4 border-end">
-                        <h5 class="fw-bold text-primary mb-3">Add New Admin</h5>
-                        <form action="/register-admin" method="POST">
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold text-secondary">Username</label>
-                                <input type="text" name="username" class="form-control form-control-sm" required placeholder="მაგ: nodar_123">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold text-secondary">Email</label>
-                                <input type="email" name="email" class="form-control form-control-sm" required placeholder="admin@zarzma1.ge">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold text-secondary">Password</label>
-                                <input type="password" name="password" class="form-control form-control-sm" required placeholder="••••••••">
-                            </div>
-                            <button type="submit" class="btn text-white btn-sm w-100 fw-bold py-2" style="background-color: #6f42c1;">
-                                🚀 Register Admin
-                            </button>
-                        </form>
-                    </div>
-                <% } %>
+  <div style="max-width: 900px; margin: 0 auto; padding: 32px 24px;">
 
-                <div class="<%= currentRole === 'owner' ? 'col-md-8' : 'col-md-12' %>">
-                    <h5 class="fw-bold text-dark mb-3">Registered Administrators</h5>
-                    
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle border">
-                            <thead class="table-light">
-                                <tr class="small fw-bold text-muted">
-                                    <th>Username</th>
-                                    <th>Email</th>
-                                    <th>Status</th>
-                                    <% if (currentRole === 'owner') { %>
-                                        <th class="text-center">Action</th>
-                                    <% } %>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <% if (admins.length === 0) { %>
-                                    <tr>
-                                        <td colspan="4" class="text-center text-muted py-3">სისტემაში სხვა ადმინისტრატორები არ ფიქსირდებიან.</td>
-                                    </tr>
-                                <% } else { %>
-                                    <% admins.forEach(admin => { %>
-                                        <tr>
-                                            <td class="fw-bold"><%= admin.username %></td>
-                                            <td class="text-muted"><%= admin.email %></td>
-                                            <td>
-                                                <% if (admin.isOnline) { %>
-                                                    <span class="status-badge online">🟢 Active Now</span>
-                                                <% } else { %>
-                                                    <span class="status-badge offline">🔴 Offline</span>
-                                                <% } %>
-                                            </td>
-                                            
-                                            <% if (currentRole === 'owner') { %>
-                                                <td class="text-center">
-                                                    <form action="/admin/delete-admin" method="POST" class="m-0" onsubmit="return confirm('ნამდვილად გსურთ ამ ადმინისტრატორის წაშლა?');">
-                                                        <input type="hidden" name="adminId" value="<%= admin.id %>">
-                                                        <button type="submit" class="btn btn-danger btn-sm fw-bold py-1 px-2" style="font-size: 11px;">
-                                                            Delete
-                                                        </button>
-                                                    </form>
-                                                </td>
-                                            <% } %>
-                                        </tr>
-                                    <% }) %>
-                                <% } %>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-            </div>
-
-        </div>
+    <div class="flex-between mb-4">
+      <div>
+        <h2 style="font-size: 20px; margin-bottom: 4px;">Admin Management</h2>
+        <p style="color: var(--text-muted); font-size: 13px;">ადმინისტრატორების სია და მართვა</p>
+      </div>
     </div>
 
+    <% if (currentRole === 'owner') { %>
+    <div style="display: grid; grid-template-columns: 300px 1fr; gap: 20px; align-items: start;">
+
+      <!-- Add admin form -->
+      <div class="card-zj">
+        <div class="card-header-zj">
+          <span class="section-label" style="margin: 0;">ახალი ადმინის დამატება</span>
+        </div>
+        <form action="/register-admin" method="POST" class="form-zj">
+          <div class="form-group">
+            <label>Username</label>
+            <input type="text" name="username" required placeholder="nodar_admin">
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" name="email" required placeholder="admin@zarzma1.ge">
+          </div>
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label>პაროლი</label>
+            <input type="password" name="password" required placeholder="••••••••">
+          </div>
+          <button type="submit" class="btn-zj btn-zj-primary w-100" style="justify-content: center;">
+            + ადმინის დამატება
+          </button>
+        </form>
+      </div>
+
+      <!-- Admin list -->
+      <div>
+        <p class="section-label mb-2">რეგისტრირებული ადმინისტრატორები</p>
+        <div class="card-zj" style="padding: 0; overflow: hidden;">
+          <% if (!admins || admins.length === 0) { %>
+            <div style="text-align: center; padding: 48px; color: var(--text-muted); font-size: 14px;">
+              ადმინისტრატორები არ მოიძებნა.
+            </div>
+          <% } else { %>
+            <table class="table-zj">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Email</th>
+                  <th>სტატუსი</th>
+                  <th class="center">მოქმედება</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% admins.forEach(function(admin) { %>
+                <tr>
+                  <td style="font-weight: 700;"><%= admin.username %></td>
+                  <td style="font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary);"><%= admin.email %></td>
+                  <td>
+                    <% if (admin.isOnline) { %>
+                      <span class="badge-zj badge-ac">● აქტიურია</span>
+                    <% } else { %>
+                      <span class="badge-zj badge-muted">● Offline</span>
+                    <% } %>
+                  </td>
+                  <td class="center">
+                    <form action="/admin/delete-admin" method="POST" style="margin:0;"
+                          onsubmit="return confirm('ნამდვილად გსურთ ამ ადმინის წაშლა?');">
+                      <input type="hidden" name="adminId" value="<%= admin.id %>">
+                      <button type="submit" class="btn-zj btn-zj-danger btn-zj-sm">წაშლა</button>
+                    </form>
+                  </td>
+                </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          <% } %>
+        </div>
+      </div>
+
+    </div>
+    <% } else { %>
+
+    <!-- Admin view (no form, full width) -->
+    <p class="section-label mb-2">რეგისტრირებული ადმინისტრატორები</p>
+    <div class="card-zj" style="padding: 0; overflow: hidden;">
+      <% if (!admins || admins.length === 0) { %>
+        <div style="text-align: center; padding: 48px; color: var(--text-muted); font-size: 14px;">
+          ადმინისტრატორები არ მოიძებნა.
+        </div>
+      <% } else { %>
+        <table class="table-zj">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Email</th>
+              <th>სტატუსი</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% admins.forEach(function(admin) { %>
+            <tr>
+              <td style="font-weight: 700;"><%= admin.username %></td>
+              <td style="font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary);"><%= admin.email %></td>
+              <td>
+                <% if (admin.isOnline) { %>
+                  <span class="badge-zj badge-ac">● აქტიურია</span>
+                <% } else { %>
+                  <span class="badge-zj badge-muted">● Offline</span>
+                <% } %>
+              </td>
+            </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+
+    <% } %>
+  </div>
 </body>
 </html>

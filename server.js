@@ -5,95 +5,165 @@ const multer = require('multer');
 const { execSync } = require('child_process');
 const fs = require('fs');
 const { marked } = require('marked');
+const mongoose = require('mongoose');
+const MongoStore = require('connect-mongo');
 
+// ==========================================
+// 🔗 MongoDB კავშირი
+// ⚠️ YOUR_PASSWORD-ის ნაცვლად ჩასვი შენი პაროლი
+// ==========================================
+const MONGO_URI = 'mongodb+srv://zarzma:zarzma777@cluster0.8xbmxry.mongodb.net/zarzma_judge?retryWrites=true&w=majority&appName=Cluster0';
+
+mongoose.connect(MONGO_URI)
+    .then(() => console.log('✅ MongoDB Atlas-თან კავშირი დამყარდა!'))
+    .catch(err => console.error('❌ MongoDB შეცდომა:', err));
+
+// ==========================================
+// 📋 MongoDB სქემები
+// ==========================================
+const StudentSchema = new mongoose.Schema({
+    id: String,
+    username: String,
+    email: { type: String, unique: true },
+    password: String
+});
+
+const AdminSchema = new mongoose.Schema({
+    id: String,
+    username: String,
+    email: { type: String, unique: true },
+    password: String,
+    role: { type: String, default: 'admin' },
+    lastActive: Date
+});
+
+const ContestSchema = new mongoose.Schema({
+    id: String,
+    title: String,
+    tasks: [String],
+    tasksData: [{ name: String, timeLimit: Number, memoryLimit: Number }],
+    duration: Number,
+    createdAt: String,
+    allowedUser: String,
+    allowedPassword: String
+});
+
+const SubmissionSchema = new mongoose.Schema({
+    id: String,
+    contestId: String,
+    email: String,
+    taskName: String,
+    points: Number,
+    status: String,
+    compilationTime: String,
+    executionTime: String,
+    memoryUsed: String,
+    savedFilename: String,
+    time: String
+});
+
+const QuestionSchema = new mongoose.Schema({
+    id: String,
+    contestId: String,
+    userEmail: String,
+    taskName: String,
+    question: String,
+    answer: { type: String, default: '' },
+    time: String
+});
+
+const Student    = mongoose.model('Student',    StudentSchema);
+const Admin      = mongoose.model('Admin',      AdminSchema);
+const Contest    = mongoose.model('Contest',    ContestSchema);
+const Submission = mongoose.model('Submission', SubmissionSchema);
+const Question   = mongoose.model('Question',   QuestionSchema);
+
+// ==========================================
+// 🌱 პირველი გაშვებისას საწყისი ადმინების შექმნა
+// ==========================================
+async function seedAdmins() {
+    const count = await Admin.countDocuments();
+    if (count === 0) {
+        await Admin.insertMany([
+            {
+                id: "1",
+                username: "Admin",
+                email: "admin@gmail.com",
+                password: "admin",
+                role: "admin",
+                lastActive: null
+            },
+            {
+                id: "2",
+                username: "Grigoli",
+                email: "Zarzma7@gmail.com",
+                password: "123qweasd",
+                role: "owner",
+                lastActive: null
+            }
+        ]);
+        console.log('🌱 საწყისი ადმინები შეიქმნა');
+    }
+}
+
+mongoose.connection.once('open', seedAdmins);
+
+// ==========================================
+// ⚙️ Express კონფიგურაცია
+// ==========================================
 const app = express();
+
 const upload = multer({ dest: 'uploads/' });
 
-// 📄 კონფიგურაცია მულტი-ფაილების მისაღებად (მაქსიმუმ 100 ტესტი ერთ ამოცანაში)
 const contestUploadConfig = upload.fields([
-    { name: 'taskPdfs', maxCount: 10 },
-    { name: 'taskInputs', maxCount: 100 },
+    { name: 'taskPdfs',    maxCount: 10  },
+    { name: 'taskInputs',  maxCount: 100 },
     { name: 'taskOutputs', maxCount: 100 }
 ]);
 
-// ==========================================
-// 📂 JSON ბაზის ფუნქციები და საქაღალდეები
-// ==========================================
-const DB_DIR = path.join(__dirname, 'database');
 const CODES_DIR = path.join(__dirname, 'uploads', 'codes');
-
-if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR);
 if (!fs.existsSync(CODES_DIR)) fs.mkdirSync(CODES_DIR, { recursive: true });
 
-const readData = (fileName, defaultValue = []) => {
-    const filePath = path.join(DB_DIR, fileName);
-    if (!fs.existsSync(filePath)) {
-        fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2));
-        return defaultValue;
-    }
-    return JSON.parse(fs.readFileSync(filePath));
-};
-
-const writeData = (fileName, data) => {
-    const filePath = path.join(DB_DIR, fileName);
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-};
-
-// 👑 სუპერ ლოგიკა: შენი პირადი მეილი, რომელიც არის ერთადერთი OWNER
 const OWNER_EMAIL = 'Zarzma7@gmail.com';
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'code-contest-platform', 'views'));
 
+app.use('/public', express.static(path.join(__dirname, 'public')));
+app.use('/tasks',  express.static(path.join(__dirname, 'tasks')));
 app.use(express.urlencoded({ extended: true }));
-app.use('/tasks', express.static(path.join(__dirname, 'tasks'))); // საჯარო წვდომა პირობებზე
 
 app.use(session({
     secret: 'zarzma_secret_key_123',
     resave: false,
-    saveUninitialized: true
+    saveUninitialized: false,
+    store: MongoStore.create({ mongoUrl: MONGO_URI })
 }));
 
 // ==========================================
-// ⏱️ Middleware: ადმინების/Owner-ის აქტივობის სათვალთვალოდ
+// ⏱️ Middleware: ადმინის ბოლო აქტივობის ჩაწერა
 // ==========================================
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
     if (req.session && req.session.userEmail && (req.session.role === 'admin' || req.session.role === 'owner')) {
-        let admins = readData('admins.json', [
-            { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", role: "admin", lastActive: null },
-            { id: "2", username: "Grigoli", email: "Zarzma7@gmail.com", password: "123qweasd", role: "owner", lastActive: null }
-        ]);
-
-        let updated = false;
-        admins = admins.map(a => {
-            if (a.email === req.session.userEmail) {
-                a.lastActive = new Date().toISOString();
-                updated = true;
-            }
-            return a;
-        });
-
-        if (updated) {
-            writeData('admins.json', admins);
-        }
+        await Admin.findOneAndUpdate(
+            { email: req.session.userEmail },
+            { lastActive: new Date() }
+        );
     }
     next();
 });
 
 // ==========================================
-// 👑 ადმინების მართვა (Owner & Admin)
+// 👑 ადმინების მართვა
 // ==========================================
-app.get('/register-admin', (req, res) => {
+app.get('/register-admin', async (req, res) => {
     if (!req.session || (req.session.role !== 'admin' && req.session.role !== 'owner')) {
-        return res.status(403).send('წვდომა უარყოფილია: ამ გვერდზე შესვლა მხოლოდ ადმინისტრატორებს/მფლობელს შეუძლიათ!');
+        return res.status(403).send('წვდომა უარყოფილია: ამ გვერდზე შესვლა მხოლოდ ადმინისტრატორებს შეუძლიათ!');
     }
 
-    const admins = readData('admins.json', [
-        { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", role: "admin", lastActive: null },
-        { id: "2", username: "Grigoli", email: "Zarzma7@gmail.com", password: "123qweasd", role: "owner", lastActive: null }
-    ]);
-
+    const admins = await Admin.find().lean();
     const now = new Date();
+
     const adminsWithStatus = admins.map(admin => {
         let isOnline = false;
         if (admin.lastActive) {
@@ -104,31 +174,31 @@ app.get('/register-admin', (req, res) => {
             id: admin.id,
             username: admin.username,
             email: admin.email,
-            role: admin.role || 'admin',
+            role: admin.role,
             isOnline: isOnline
         };
     });
 
-    res.render('register-admin', { 
-        admins: adminsWithStatus, 
-        currentRole: req.session.role 
-    }); 
+    res.render('register-admin', {
+        admins: adminsWithStatus,
+        currentRole: req.session.role
+    });
 });
 
-app.post('/register-admin', (req, res) => {
+app.post('/register-admin', async (req, res) => {
     if (!req.session || req.session.role !== 'owner') {
         return res.status(403).send('მოქმედება უარყოფილია: ადმინის დამატება შეუძლია მხოლოდ Owner-ს!');
     }
 
     const { username, password, email } = req.body;
-    const admins = readData('admins.json', []);
 
-    if (admins.some(a => a.email === email.trim())) {
+    const exists = await Admin.findOne({ email: email.trim() });
+    if (exists) {
         return res.send('<script>alert("ეს ელ-ფოსტა უკვე გამოყენებულია!"); window.location="/register-admin";</script>');
     }
 
     if (username && password && email) {
-        admins.push({
+        await Admin.create({
             id: Date.now().toString(),
             username: username.trim(),
             email: email.trim(),
@@ -136,99 +206,79 @@ app.post('/register-admin', (req, res) => {
             role: 'admin',
             lastActive: null
         });
-        writeData('admins.json', admins);
     }
 
     res.redirect('/register-admin');
 });
 
-app.post('/admin/delete-admin', (req, res) => {
+app.post('/admin/delete-admin', async (req, res) => {
     if (!req.session || req.session.role !== 'owner') {
         return res.status(403).send('მოქმედება უარყოფილია: ადმინის წაშლა შეუძლია მხოლოდ Owner-ს!');
     }
 
     const { adminId } = req.body;
-    let admins = readData('admins.json', []);
+    const targetAdmin = await Admin.findOne({ id: adminId });
 
-    const targetAdmin = admins.find(a => a.id === adminId);
     if (targetAdmin && (targetAdmin.email === OWNER_EMAIL || targetAdmin.email === 'admin@gmail.com')) {
-        return res.send('<script>alert("უსაზიზღროების გამო ამ პროფილის წაშლა აკრძალულია!"); window.location="/register-admin";</script>');
+        return res.send('<script>alert("ამ პროფილის წაშლა აკრძალულია!"); window.location="/register-admin";</script>');
     }
 
-    admins = admins.filter(a => a.id !== adminId);
-    writeData('admins.json', admins);
-
+    await Admin.deleteOne({ id: adminId });
     res.redirect('/register-admin');
 });
 
 // ==========================================
-// ავტორიზაცია (Login)
+// 🔐 ავტორიზაცია (Login / Logout)
 // ==========================================
 app.get('/', (req, res) => {
     if (req.session.userId) return res.redirect('/contests');
     res.render('login', { error: null });
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
     const { email, password } = req.body;
     const cleanEmail = email.trim();
-    
-    // 1. თუ მთავარი OWNER შედის პირდაპირი შემოწმებით
-    if (cleanEmail === 'Zarzma7@gmail.com' && password === '123qweasd') {
-        req.session.userId = `owner_zarzma7`;
-        req.session.userEmail = cleanEmail;
-        req.session.role = 'owner';
-        req.session.username = "Grigoli"; // რადგან ეს მთავარი ექაუნთია, პირდაპირ Grigoli დავუწეროთ
-        return res.redirect('/contests');
-    }
-    
-    const admins = readData('admins.json', [
-        { id: "1", username: "Admin", email: "admin@gmail.com", password: "admin", role: "admin", lastActive: null },
-        { id: "2", username: "Grigoli", email: "Zarzma7@gmail.com", password: "123qweasd", role: "owner", lastActive: null }
-    ]);
 
-    // 2. თუ ადმინთა ბაზაში მოიძებნა
-    const foundAdmin = admins.find(a => a.email === cleanEmail && a.password === password);
+    // 1. Owner-ის პირდაპირი შემოწმება
+    if (cleanEmail === OWNER_EMAIL && password === '123qweasd') {
+        req.session.userId    = 'owner_zarzma7';
+        req.session.userEmail = cleanEmail;
+        req.session.role      = 'owner';
+        req.session.username  = 'Grigoli';
+        return res.redirect('/contests');
+    }
+
+    // 2. ადმინების ბაზაში შემოწმება
+    const foundAdmin = await Admin.findOne({ email: cleanEmail, password: password });
     if (foundAdmin) {
-        req.session.userId = `admin_${foundAdmin.email}`;
+        req.session.userId    = `admin_${foundAdmin.email}`;
         req.session.userEmail = foundAdmin.email;
-        // სესიაში ვინახავთ ადმინების ბაზაში არსებულ იუზერნეიმს (მაგ: Admin ან Grigoli)
-        req.session.username = foundAdmin.username || "ადმინისტრატორი"; 
-        
-        if (foundAdmin.email === OWNER_EMAIL || foundAdmin.role === 'owner') {
-            req.session.role = 'owner';
-        } else {
-            req.session.role = 'admin';
-        }
+        req.session.username  = foundAdmin.username || 'ადმინისტრატორი';
+        req.session.role      = (foundAdmin.email === OWNER_EMAIL || foundAdmin.role === 'owner') ? 'owner' : 'admin';
         return res.redirect('/contests');
     }
-    
-    const contests = readData('contests.json');
-    const matchedContestForChecker = contests.find(c => c.allowedUser === cleanEmail && c.allowedPassword === password);
-    
-    // 3. თუ ჩეკერია
-    if (matchedContestForChecker) {
-        req.session.userId = `checker_${cleanEmail}_${Date.now()}`;
-        req.session.role = 'checker';
+
+    // 3. Checker-ის შემოწმება (კონტესტის allowedUser/allowedPassword)
+    const allContests = await Contest.find().lean();
+    const checkerContest = allContests.find(c => c.allowedUser === cleanEmail && c.allowedPassword === password);
+    if (checkerContest) {
+        req.session.userId    = `checker_${cleanEmail}_${Date.now()}`;
+        req.session.role      = 'checker';
         req.session.userEmail = cleanEmail;
-        req.session.username = "Checker"; // ჩეკერებისთვის დეფოლტ სახელი
+        req.session.username  = 'Checker';
         return res.redirect('/contests');
     }
-    
-    const students = readData('students.json', [{ email: 'student@gmail.com', password: '123' }]);
-    const foundStudent = students.find(s => s.email === cleanEmail && s.password === password);
-    
-    // 4. თუ სტუდენტების ბაზაში მოიძებნა
+
+    // 4. სტუდენტების ბაზაში შემოწმება
+    const foundStudent = await Student.findOne({ email: cleanEmail, password: password });
     if (foundStudent) {
-        req.session.userId = `student_${foundStudent.email}`;
-        req.session.role = 'student';
+        req.session.userId    = `student_${foundStudent.email}`;
+        req.session.role      = 'student';
         req.session.userEmail = cleanEmail;
-        // აქ ვიღებთ რეგისტრაციისას ჩაწერილ სახელსა და გვარს (username)
-        // თუ ძველ სტუდენტებს არ უწერიათ, ალტერნატივად გამოიყენებს 'სტუდენტი'-ს ან მეილის საწყისს
-        req.session.username = foundStudent.username || foundStudent.name || cleanEmail.split('@')[0];
+        req.session.username  = foundStudent.username || cleanEmail.split('@')[0];
         return res.redirect('/contests');
     }
-    
+
     res.render('login', { error: 'არასწორი მეილი ან პაროლი!' });
 });
 
@@ -237,212 +287,208 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
 });
 
-app.get('/contests', (req, res) => {
+// ==========================================
+// 🏠 კონტესტების სია (Dashboard)
+// ==========================================
+app.get('/contests', async (req, res) => {
     if (!req.session.userId) return res.redirect('/');
-    
-    const contests = readData('contests.json');
-    
-    res.render('contests', { 
-        contests, 
+
+    const contests = await Contest.find().lean();
+
+    res.render('contests', {
+        contests,
         role: req.session.role,
-        username: req.session.username // პირდაპირ სესიიდან ვატანთ გამზადებულ სახელს
+        username: req.session.username
     });
 });
 
 // ==========================================
-// კონტესტების მართვა & კონფიგურაცია
+// ➕ კონტესტის შექმნა
 // ==========================================
 app.get('/admin/create-contest', (req, res) => {
-    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') {
+        return res.status(403).send('წვდომა უარყოფილია');
+    }
     res.render('create-contest');
 });
 
-app.post('/admin/create-contest', contestUploadConfig, (req, res) => {
-    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
-    
-    const { title, duration, taskNames, taskTimeLimits, taskMemoryLimits } = req.body;
-    
-    if (title && title.trim() !== "") {
-        const contests = readData('contests.json');
-        const newContestId = Date.now().toString();
-        const finalizedTasksArray = [];
-
-        const pdfFiles = req.files['taskPdfs'] || [];
-        const inputFiles = req.files['taskInputs'] || [];
-        const outputFiles = req.files['taskOutputs'] || [];
-
-        const timeLimits = Array.isArray(taskTimeLimits) ? taskTimeLimits : [taskTimeLimits];
-        const memoryLimits = Array.isArray(taskMemoryLimits) ? taskMemoryLimits : [taskMemoryLimits];
-
-        if (taskNames && Array.isArray(taskNames)) {
-            taskNames.forEach((name, index) => {
-                const cleanName = name.trim();
-                if (cleanName === "") return;
-
-                const taskFolder = path.join(__dirname, 'tasks', cleanName);
-                const inputDir = path.join(taskFolder, 'input');
-                const outputDir = path.join(taskFolder, 'output');
-
-                if (!fs.existsSync(taskFolder)) fs.mkdirSync(taskFolder, { recursive: true });
-                if (!fs.existsSync(inputDir)) fs.mkdirSync(inputDir);
-                if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
-
-                if (pdfFiles[index]) {
-                    const oldPath = pdfFiles[index].path;
-                    const newPath = path.join(taskFolder, 'statement.pdf');
-                    fs.renameSync(oldPath, newPath);
-                }
-
-                const getFileIndex = (originalName, fallbackIndex) => {
-                    const match = originalName.match(/\d+/);
-                    return match ? match[0] : fallbackIndex;
-                };
-
-                inputFiles.forEach((file, fIdx) => {
-                    const testNum = getFileIndex(file.originalname, fIdx + 1);
-                    const oldPath = file.path;
-                    const newPath = path.join(inputDir, `input_${testNum}`);
-                    if (fs.existsSync(oldPath)) fs.renameSync(oldPath, newPath);
-                });
-
-                outputFiles.forEach((file, fIdx) => {
-                    const testNum = getFileIndex(file.originalname, fIdx + 1);
-                    const oldPath = file.path;
-                    const newPath = path.join(outputDir, `output_${testNum}`);
-                    if (fs.existsSync(oldPath)) fs.renameSync(oldPath, newPath);
-                });
-
-                finalizedTasksArray.push({
-                    name: cleanName,
-                    timeLimit: parseFloat(timeLimits[index]) || 2.0,
-                    memoryLimit: parseInt(memoryLimits[index]) || 256
-                });
-            });
-        }
-        
-        contests.push({
-            id: newContestId,
-            _id: newContestId,
-            title: title.trim(),
-            tasksData: finalizedTasksArray, 
-            tasks: finalizedTasksArray.map(t => t.name), 
-            duration: parseInt(duration) || 180,
-            createdAt: new Date().toISOString(),
-            allowedUser: 'checker',       
-            allowedPassword: 'checker'    
-        });
-        
-        writeData('contests.json', contests);
+app.post('/admin/create-contest', contestUploadConfig, async (req, res) => {
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') {
+        return res.status(403).send('წვდომა უარყოფილია');
     }
+
+    const { title, duration, taskNames, taskTimeLimits, taskMemoryLimits } = req.body;
+
+    if (!title || title.trim() === '') {
+        return res.redirect('/contests');
+    }
+
+    const newContestId     = Date.now().toString();
+    const finalizedTasks   = [];
+    const pdfFiles         = req.files['taskPdfs']    || [];
+    const inputFiles       = req.files['taskInputs']  || [];
+    const outputFiles      = req.files['taskOutputs'] || [];
+    const timeLimits       = Array.isArray(taskTimeLimits)   ? taskTimeLimits   : [taskTimeLimits];
+    const memoryLimits     = Array.isArray(taskMemoryLimits) ? taskMemoryLimits : [taskMemoryLimits];
+
+    if (taskNames && Array.isArray(taskNames)) {
+        taskNames.forEach((name, index) => {
+            const cleanName = name.trim();
+            if (!cleanName) return;
+
+            const taskFolder = path.join(__dirname, 'tasks', cleanName);
+            const inputDir   = path.join(taskFolder, 'input');
+            const outputDir  = path.join(taskFolder, 'output');
+
+            if (!fs.existsSync(taskFolder)) fs.mkdirSync(taskFolder, { recursive: true });
+            if (!fs.existsSync(inputDir))   fs.mkdirSync(inputDir);
+            if (!fs.existsSync(outputDir))  fs.mkdirSync(outputDir);
+
+            if (pdfFiles[index]) {
+                const oldPath = pdfFiles[index].path;
+                const newPath = path.join(taskFolder, 'statement.pdf');
+                fs.renameSync(oldPath, newPath);
+            }
+
+            const getFileIndex = (originalName, fallbackIndex) => {
+                const match = originalName.match(/\d+/);
+                return match ? match[0] : fallbackIndex;
+            };
+
+            inputFiles.forEach((file, fIdx) => {
+                const testNum = getFileIndex(file.originalname, fIdx + 1);
+                const newPath = path.join(inputDir, `input_${testNum}`);
+                if (fs.existsSync(file.path)) fs.renameSync(file.path, newPath);
+            });
+
+            outputFiles.forEach((file, fIdx) => {
+                const testNum = getFileIndex(file.originalname, fIdx + 1);
+                const newPath = path.join(outputDir, `output_${testNum}`);
+                if (fs.existsSync(file.path)) fs.renameSync(file.path, newPath);
+            });
+
+            finalizedTasks.push({
+                name: cleanName,
+                timeLimit: parseFloat(timeLimits[index]) || 2.0,
+                memoryLimit: parseInt(memoryLimits[index]) || 256
+            });
+        });
+    }
+
+    await Contest.create({
+        id: newContestId,
+        title: title.trim(),
+        tasksData: finalizedTasks,
+        tasks: finalizedTasks.map(t => t.name),
+        duration: parseInt(duration) || 180,
+        createdAt: new Date().toISOString(),
+        allowedUser: 'checker',
+        allowedPassword: 'checker'
+    });
+
     res.redirect('/contests');
 });
 
-app.get('/admin/configure-contest/:id', (req, res) => {
-    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
-    const contests = readData('contests.json');
-    const contest = contests.find(c => String(c.id) === String(req.params.id));
+// ==========================================
+// 🔧 კონტესტის კონფიგურაცია
+// ==========================================
+app.get('/admin/configure-contest/:id', async (req, res) => {
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') {
+        return res.status(403).send('წვდომა უარყოფილია');
+    }
+    const contest = await Contest.findOne({ id: req.params.id }).lean();
     if (!contest) return res.status(404).send('კონტესტი ვერ მოიძებნა');
     res.render('configure-contest', { contest });
 });
 
-app.post('/admin/configure-contest/:id', (req, res) => {
-    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
-    const { duration, allowedUser, allowedPassword } = req.body;
-    
-    const contests = readData('contests.json');
-    const contest = contests.find(c => String(c.id) === String(req.params.id));
-    
-    if (contest) {
-        contest.duration = parseInt(duration) || 180;
-        contest.allowedUser = allowedUser ? allowedUser.trim() : 'checker';
-        contest.allowedPassword = allowedPassword ? allowedPassword.trim() : 'checker';
-        writeData('contests.json', contests);
+app.post('/admin/configure-contest/:id', async (req, res) => {
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') {
+        return res.status(403).send('წვდომა უარყოფილია');
     }
+    const { duration, allowedUser, allowedPassword } = req.body;
+
+    await Contest.findOneAndUpdate(
+        { id: req.params.id },
+        {
+            duration: parseInt(duration) || 180,
+            allowedUser: allowedUser ? allowedUser.trim() : 'checker',
+            allowedPassword: allowedPassword ? allowedPassword.trim() : 'checker'
+        }
+    );
+
     res.redirect('/contests');
 });
 
-app.post('/admin/delete-contest', (req, res) => {
-    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
+// ==========================================
+// 🗑️ კონტესტის წაშლა
+// ==========================================
+app.post('/admin/delete-contest', async (req, res) => {
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') {
+        return res.status(403).send('წვდომა უარყოფილია');
+    }
+
     const { contestId } = req.body;
-    
-    let contests = readData('contests.json');
-    
-    // 1. ვპოულობთ კონტესტს წაშლამდე, რომ გავიგოთ რა ამოცანები (tasks) ჰქონდა მასში
-    const contestToDelete = contests.find(c => String(c.id) === String(contestId) || String(c._id) === String(contestId));
-    
-    if (contestToDelete && contestToDelete.tasks && contestToDelete.tasks.length > 0) {
-        const fs = require('fs');
-        const path = require('path');
-        
-        // სათითაოდ გადავუაროთ კონტესტში არსებულ ყველა დავალების საქაღალდეს
-        contestToDelete.tasks.forEach(taskName => {
+
+    const contest = await Contest.findOne({ id: contestId }).lean();
+    if (contest && contest.tasks && contest.tasks.length > 0) {
+        contest.tasks.forEach(taskName => {
             const taskFolderPath = path.join(__dirname, 'tasks', taskName);
-            
-            // თუ საქაღალდე არსებობს, ვშლით მას ძირიან-ფესვიანად (input, output, pdf)
             if (fs.existsSync(taskFolderPath)) {
                 try {
                     fs.rmSync(taskFolderPath, { recursive: true, force: true });
-                    console.log(`საქაღალდე [${taskName}] ავტომატურად წაიშალა.`);
+                    console.log(`საქაღალდე [${taskName}] წაიშალა.`);
                 } catch (err) {
-                    console.error(`შეცდომა [${taskName}] საქაღალდის წაშლისას:`, err);
+                    console.error(`შეცდომა [${taskName}] წაშლისას:`, err);
                 }
             }
         });
     }
 
-    // 2. ვშლით კონტესტს ბაზიდან (შენი ორიგინალი ლოგიკა)
-    contests = contests.filter(c => String(c.id) !== String(contestId) && String(c._id) !== String(contestId));
-    writeData('contests.json', contests);
-    
-    // 3. ვშლით ამ კონტესტის სუბმიშენებს
-    let allSubmissions = readData('submissions.json');
-    allSubmissions = allSubmissions.filter(s => String(s.contestId) !== String(contestId));
-    writeData('submissions.json', allSubmissions);
+    await Contest.deleteOne({ id: contestId });
+    await Submission.deleteMany({ contestId });
+    await Question.deleteMany({ contestId });
 
-    // 4. ვშლით ამ კონტესტის კითხვებს
-    let allQuestions = readData('questions.json');
-    allQuestions = allQuestions.filter(q => String(q.contestId) !== String(contestId));
-    writeData('questions.json', allQuestions);
-    
     res.redirect('/contests');
 });
 
 // ==========================================
-// CMS გარემო - კონტესტის შიდა გვერდი
+// 🖥️ კონტესტის შიდა გვერდი (CMS გარემო)
 // ==========================================
-app.get('/contest/:id', (req, res) => {
+app.get('/contest/:id', async (req, res) => {
     if (!req.session.userId) return res.redirect('/');
-    
-    const contests = readData('contests.json');
-    const contest = contests.find(c => String(c.id) === String(req.params.id) || String(c._id) === String(req.params.id));
-    if (!contest) return res.status(404).send('კონტესტი ვერ მოიძებნა');
-    
-    const currentTask = req.query.task || null;
-    const viewType = req.query.view || 'overview';
-    
-    const startTime = new Date(contest.createdAt);
-    const endTime = new Date(startTime.getTime() + contest.duration * 60000);
-    const timeLeft = Math.max(0, endTime - new Date());
 
-    const allSubmissions = readData('submissions.json');
+    const contest = await Contest.findOne({ id: req.params.id }).lean();
+    if (!contest) return res.status(404).send('კონტესტი ვერ მოიძებნა');
+
+    const currentTask = req.query.task || null;
+    const viewType    = req.query.view || 'overview';
+
+    const startTime = new Date(contest.createdAt);
+    const endTime   = new Date(startTime.getTime() + contest.duration * 60000);
+    const timeLeft  = Math.max(0, endTime - new Date());
+
     let submissions = [];
-    
-    if (currentTask) {
-        if (viewType === 'submissions') {
-            submissions = allSubmissions.filter(s => String(s.contestId) === String(contest.id) && s.email === req.session.userEmail && s.taskName === currentTask);
-        } else if (viewType === 'all-submissions') {
-            submissions = allSubmissions.filter(s => String(s.contestId) === String(contest.id) && s.email === req.session.userEmail);
-        }
-    } else if (viewType === 'all-submissions') {
-        submissions = allSubmissions.filter(s => String(s.contestId) === String(contest.id) && s.email === req.session.userEmail);
+    if (viewType === 'all-submissions') {
+        submissions = await Submission.find({
+            contestId: contest.id,
+            email: req.session.userEmail
+        }).lean();
+    } else if (viewType === 'submissions' && currentTask) {
+        submissions = await Submission.find({
+            contestId: contest.id,
+            email: req.session.userEmail,
+            taskName: currentTask
+        }).lean();
     }
 
     let remainingSubmissions = 50;
     if (currentTask) {
-        const currentTaskSubs = allSubmissions.filter(s => 
-            String(s.contestId) === String(contest.id) && s.email === req.session.userEmail && s.taskName === currentTask
-        ).length;
-        remainingSubmissions = Math.max(0, 50 - currentTaskSubs);
+        const count = await Submission.countDocuments({
+            contestId: contest.id,
+            email: req.session.userEmail,
+            taskName: currentTask
+        });
+        remainingSubmissions = Math.max(0, 50 - count);
     }
 
     let taskLimits = { timeLimit: 2.0, memoryLimit: 256 };
@@ -460,150 +506,145 @@ app.get('/contest/:id', (req, res) => {
     let pdfUrl = null;
 
     if (currentTask) {
-        const pdfPath = path.join(__dirname, 'tasks', currentTask, 'statement.pdf');
+        const pdfPath      = path.join(__dirname, 'tasks', currentTask, 'statement.pdf');
         const statementPath = path.join(__dirname, 'tasks', currentTask, 'statement.md');
-        
+
         if (fs.existsSync(pdfPath)) {
             pdfUrl = `/tasks/${currentTask}/statement.pdf`;
         } else if (fs.existsSync(statementPath)) {
             const markdownContent = fs.readFileSync(statementPath, 'utf-8');
             taskStatementHtml = marked(markdownContent);
         } else {
-            taskStatementHtml = `<p class="text-muted">⚠️ პირობის ფაილი ვერ მოიძებნა <code>tasks/${currentTask}/</code> საქაღალდეში.</p>`;
+            taskStatementHtml = `<p>⚠️ პირობის ფაილი ვერ მოიძებნა <code>tasks/${currentTask}/</code> საქაღალდეში.</p>`;
         }
     }
-    
+
     res.render('contest-view', {
-        contest, currentTask, viewType, submissions, timeLeft, role: req.session.role,
-        taskStatementHtml, pdfUrl, taskLimits, remainingSubmissions
+        contest,
+        currentTask,
+        viewType,
+        submissions,
+        timeLeft,
+        role: req.session.role,
+        taskStatementHtml,
+        pdfUrl,
+        taskLimits,
+        remainingSubmissions
     });
 });
 
 // ==========================================
-// 📥 როუტები კოდის გადმოწერისთვის და დეტალებისთვის
+// 📥 კოდის გადმოწერა
 // ==========================================
-app.get('/download-code/:id', (req, res) => {
+app.get('/download-code/:id', async (req, res) => {
     if (!req.session.userId) return res.redirect('/');
-    
-    const submissions = readData('submissions.json');
-    const sub = submissions.find(s => String(s.id) === String(req.params.id));
-    
+
+    const sub = await Submission.findOne({ id: req.params.id }).lean();
     if (!sub) return res.status(404).send('ჩანაწერი ვერ მოიძებნა');
-    
-    // უსაფრთხოება: მოსწავლე მხოლოდ საკუთარ ფაილს იწერს, ადმინი/owner ყველასას
+
     if (req.session.role === 'student' && sub.email !== req.session.userEmail) {
         return res.status(403).send('წვდომა უარყოფილია');
     }
-    
+
     const savedCodePath = path.join(CODES_DIR, sub.savedFilename);
     if (!fs.existsSync(savedCodePath)) {
         return res.status(404).send('კოდის ფაილი სერვერზე ვერ მოიძებნა');
     }
-    
+
     res.download(savedCodePath, `${sub.taskName}_submission.cpp`);
 });
 
-// 🚀 განახლებული როუტი /submission/:id - კოდის უსაფრთხო წაკითხვით და თავსებადობით
-app.get('/submission/:id', (req, res) => {
+// ==========================================
+// 📄 გაგზავნის დეტალები
+// ==========================================
+app.get('/submission/:id', async (req, res) => {
     if (!req.session.userId) return res.redirect('/');
-    
-    const submissions = readData('submissions.json');
-    const sub = submissions.find(s => String(s.id) === String(req.params.id));
-    
+
+    const sub = await Submission.findOne({ id: req.params.id }).lean();
     if (!sub) return res.status(404).send('ჩანაწერი ვერ მოიძებნა');
-    
+
     if (req.session.role === 'student' && sub.email !== req.session.userEmail) {
         return res.status(403).send('წვდომა უარყოფილია');
     }
-    
-    // ვკითხულობთ კოდის ფაილს სერვერის მხრიდან
-    let codeContent = "კოდის ფაილი ვერ მოიძებნა ან წაშლილია.";
+
+    let codeContent = 'კოდის ფაილი ვერ მოიძებნა ან წაშლილია.';
     if (sub.savedFilename) {
         const codePath = path.join(CODES_DIR, sub.savedFilename);
         if (fs.existsSync(codePath)) {
             codeContent = fs.readFileSync(codePath, 'utf-8');
         }
     }
-    
-    // კოდის ტექსტს პირდაპირ ობიექტში ვსვამთ, რომ EJS-მა უპრობლემოდ დაინახოს
+
     sub.codeContent = codeContent;
-    
     res.render('submission-details', { sub });
 });
 
 // ==========================================
-// CMS JUDGE - კოდის მიღება და ტესტირება
+// ⚡ კოდის გაგზავნა და ტესტირება
 // ==========================================
-app.post('/submit-code', upload.single('codeFile'), (req, res) => {
+app.post('/submit-code', upload.single('codeFile'), async (req, res) => {
     if (!req.session.userId) return res.redirect('/');
-    
+
     const { contestId, taskName } = req.body;
-    const contests = readData('contests.json');
-    const contest = contests.find(c => String(c.id) === String(contestId));
-    
+    const contest = await Contest.findOne({ id: contestId }).lean();
+    if (!contest) return res.status(404).send('კონტესტი ვერ მოიძებნა');
+
     const startTime = new Date(contest.createdAt);
-    const endTime = new Date(startTime.getTime() + contest.duration * 60000);
-    
+    const endTime   = new Date(startTime.getTime() + contest.duration * 60000);
+
     if (new Date() > endTime && req.session.role !== 'checker' && req.session.role !== 'admin' && req.session.role !== 'owner') {
-        return res.status(400).send('კონტესტის დრო ამოიწურა! გაგზავნა შეუძლიათ მხოლოდ Allowed იუზერებს (Upsolving).');
+        return res.status(400).send('კონტესტის დრო ამოიწურა! გაგზავნა შეუძლიათ მხოლოდ Allowed იუზერებს.');
     }
 
-    const allSubmissions = readData('submissions.json');
-    const taskSubmissionsCount = allSubmissions.filter(s => 
-        String(s.contestId) === String(contestId) && s.email === req.session.userEmail && s.taskName === taskName
-    ).length;
+    const taskSubsCount = await Submission.countDocuments({
+        contestId,
+        email: req.session.userEmail,
+        taskName
+    });
 
-    if (taskSubmissionsCount >= 50) {
-        return res.status(400).send(`ამოგეწურათ კოდის გაგზავნის ლიმიტი (მაქსიმუმ 50 მცდელობა).`);
+    if (taskSubsCount >= 50) {
+        return res.status(400).send('ამოგეწურათ კოდის გაგზავნის ლიმიტი (მაქსიმუმ 50 მცდელობა).');
     }
 
     const file = req.file;
     if (!file) return res.status(400).send('ფაილი არ არის ატვირთული');
 
-    let taskTimeLimit = 2.0; 
-    if (contest && contest.tasksData) {
+    let taskTimeLimit = 2.0;
+    if (contest.tasksData) {
         const foundTask = contest.tasksData.find(t => String(t.name).trim() === String(taskName).trim());
         if (foundTask) taskTimeLimit = parseFloat(foundTask.timeLimit) || 2.0;
     }
-    
-    const executionTimeout = Math.round(taskTimeLimit * 1000) + 2500; 
 
-    const originalUploadedPath = file.path;
-    const userCodePath = `${originalUploadedPath}.cpp`;
-    
+    const executionTimeout  = Math.round(taskTimeLimit * 1000) + 2500;
+    const userCodePath      = `${file.path}.cpp`;
+    const compiledExePath   = path.join(__dirname, 'uploads', `${file.filename}.exe`);
+
     try {
-        fs.renameSync(originalUploadedPath, userCodePath);
+        fs.renameSync(file.path, userCodePath);
     } catch (renameErr) {
         return res.status(500).send('ფაილის გადარქმევის შეცდომა სერვერზე.');
     }
 
-    const compiledExePath = path.join(__dirname, 'uploads', `${file.filename}.exe`);
-    let totalPoints = 0;
-    let status = 'Compilation succeeded';
+    let totalPoints        = 0;
+    let status             = 'Compilation succeeded';
     let compiledSuccessfully = false;
-    let maxExecutionTime = 0;
-    let memoryUsed = "147 MiB"; // იმიტირებული დეფოლტ მეხსიერება (CMS-ის მსგავსად)
+    let maxExecutionTime   = 0;
+    const memoryUsed       = '147 MiB';
 
-    const startTimeExecution = Date.now();
+    const compileStart = Date.now();
     try {
         execSync(`g++ -O3 -std=c++17 "${userCodePath}" -o "${compiledExePath}"`, { stdio: 'pipe' });
         compiledSuccessfully = true;
-    } catch (err) { 
-        status = 'Compilation failed'; 
-        console.log("\n❌====== G++ COMPILATION ERROR ======");
-        if (err.stderr) {
-            console.log(err.stderr.toString());
-        } else {
-            console.log(err.message);
-        }
-        console.log("=====================================\n");
+    } catch (err) {
+        status = 'Compilation failed';
+        console.log('❌ Compilation Error:', err.stderr ? err.stderr.toString() : err.message);
     }
-    const compilationDuration = ((Date.now() - startTimeExecution) / 1000).toFixed(3);
+    const compilationDuration = ((Date.now() - compileStart) / 1000).toFixed(3);
 
     if (compiledSuccessfully) {
         const taskFolder = path.join(__dirname, 'tasks', taskName);
-        const inputDir = path.join(taskFolder, 'input');
-        const outputDir = path.join(taskFolder, 'output');
+        const inputDir   = path.join(taskFolder, 'input');
+        const outputDir  = path.join(taskFolder, 'output');
 
         if (fs.existsSync(inputDir) && fs.existsSync(outputDir)) {
             const inputFiles = fs.readdirSync(inputDir).sort((a, b) => {
@@ -611,25 +652,25 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
                 const numB = parseInt(b.match(/\d+/)?.[0] || 0);
                 return numA - numB;
             });
-            
+
             let passedTests = 0;
 
             for (const inFile of inputFiles) {
                 const match = inFile.match(/\d+/);
                 if (!match) continue;
-                
-                const testId = match[0];
-                const currentInputData = fs.readFileSync(path.join(inputDir, inFile));
-                
-                const singleTestStart = Date.now();
+
+                const testId        = match[0];
+                const inputData     = fs.readFileSync(path.join(inputDir, inFile));
+                const singleStart   = Date.now();
+
                 try {
                     const userOutput = execSync(`"${compiledExePath}"`, {
-                        input: currentInputData,
-                        timeout: executionTimeout, 
-                        maxBuffer: 1024 * 1024 * 10 
+                        input: inputData,
+                        timeout: executionTimeout,
+                        maxBuffer: 1024 * 1024 * 10
                     }).toString().trim();
-                    
-                    const testDuration = (Date.now() - singleTestStart) / 1000;
+
+                    const testDuration = (Date.now() - singleStart) / 1000;
                     if (testDuration > maxExecutionTime) maxExecutionTime = testDuration;
 
                     const outPath = path.join(outputDir, `output_${testId}`);
@@ -638,45 +679,43 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
                         if (userOutput === correctOutput) {
                             passedTests++;
                         } else {
-                            status = `Evaluated (Wrong Answer)`;
-                            break; 
+                            status = 'Evaluated (Wrong Answer)';
+                            break;
                         }
                     }
-                } catch (execErr) { 
+                } catch (execErr) {
                     if (execErr.code === 'ETIMEDOUT') {
-                        status = `Evaluated (Time Limit Exceeded)`;
+                        status = 'Evaluated (Time Limit Exceeded)';
                     } else {
-                        status = `Evaluated (Runtime Error)`;
+                        status = 'Evaluated (Runtime Error)';
                     }
-                    break; 
+                    break;
                 }
             }
 
             if (inputFiles.length > 0) {
                 totalPoints = Math.round((passedTests / inputFiles.length) * 100);
             }
+
             if (status === 'Compilation succeeded' && totalPoints === 100) {
                 status = 'Evaluated';
             }
-        } else { 
-            totalPoints = 100; 
+        } else {
+            totalPoints = 100;
             status = 'Evaluated';
         }
     }
 
-    // 💾 ორიგინალი კოდის შენახვა გადმოწერისთვის, სანამ დროებითს წავშლით
     const savedFilename = `${Date.now()}_${file.filename}.cpp`;
     fs.copyFileSync(userCodePath, path.join(CODES_DIR, savedFilename));
-
-    if (fs.existsSync(userCodePath)) fs.unlinkSync(userCodePath);
+    if (fs.existsSync(userCodePath))    fs.unlinkSync(userCodePath);
     if (fs.existsSync(compiledExePath)) fs.unlinkSync(compiledExePath);
 
-    const now = new Date();
-    const formattedDate = now.toISOString().replace('T', ' ').substring(0, 19);
+    const formattedDate = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
-    allSubmissions.push({
+    await Submission.create({
         id: Date.now().toString(),
-        contestId: String(contestId), 
+        contestId: String(contestId),
         email: req.session.userEmail,
         taskName,
         points: totalPoints,
@@ -685,42 +724,47 @@ app.post('/submit-code', upload.single('codeFile'), (req, res) => {
         executionTime: `${maxExecutionTime.toFixed(3)} sec`,
         memoryUsed,
         savedFilename,
-        time: formattedDate 
+        time: formattedDate
     });
-    writeData('submissions.json', allSubmissions);
 
     res.redirect(`/contest/${contestId}?task=${taskName}&view=submissions`);
 });
 
 // ==========================================
-// 📊 ადმინის სკორბორდი (სრულყოფილი ლოგიკა)
+// 📊 ადმინის სკორბორდი
 // ==========================================
-app.get('/admin/scoreboard', (req, res) => {
-    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
-    
-    const contestId = req.query.contestId;
-    const contests = readData('contests.json');
-    let selectedContest = contests.find(c => String(c.id) === String(contestId)) || null;
-    
+app.get('/admin/scoreboard', async (req, res) => {
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') {
+        return res.status(403).send('წვდომა უარყოფილია');
+    }
+
+    const contests   = await Contest.find().lean();
+    const contestId  = req.query.contestId;
+    const selectedContest = contests.find(c => String(c.id) === String(contestId)) || null;
+
     let usersData = [];
 
     if (selectedContest) {
-        const allSubmissions = readData('submissions.json');
-        const students = readData('students.json', []);
-        
-        const contestSubmissions = allSubmissions.filter(s => String(s.contestId) === String(contestId));
-        const uniqueEmails = [...new Set(contestSubmissions.map(s => s.email))];
+        const allSubmissions = await Submission.find({ contestId }).lean();
+        const students       = await Student.find().lean();
+        const uniqueEmails   = [...new Set(allSubmissions.map(s => s.email))];
 
         uniqueEmails.forEach(email => {
-            const matchStudent = students.find(s => String(s.email).trim() === String(email).trim());
-            const studentName = matchStudent && matchStudent.name ? matchStudent.name : 'სტუდენტი';
+            const matchStudent  = students.find(s => String(s.email).trim() === String(email).trim());
+            const studentName   = matchStudent && matchStudent.username ? matchStudent.username : 'სტუდენტი';
 
-            let userBestSubmissions = [];
-            
+            const userBestSubmissions = [];
+
             selectedContest.tasks.forEach(taskName => {
-                const taskSubs = contestSubmissions.filter(s => String(s.email).trim() === String(email).trim() && String(s.taskName).trim() === String(taskName).trim());
+                const taskSubs = allSubmissions.filter(
+                    s => String(s.email).trim() === String(email).trim() &&
+                         String(s.taskName).trim() === String(taskName).trim()
+                );
                 if (taskSubs.length > 0) {
-                    const bestSub = taskSubs.reduce((max, s) => (parseInt(s.points) || 0) > (parseInt(max.points) || 0) ? s : max, taskSubs[0]);
+                    const bestSub = taskSubs.reduce((max, s) =>
+                        (parseInt(s.points) || 0) > (parseInt(max.points) || 0) ? s : max,
+                        taskSubs[0]
+                    );
                     userBestSubmissions.push({
                         taskName: taskName.trim(),
                         points: parseInt(bestSub.points) || 0,
@@ -736,144 +780,149 @@ app.get('/admin/scoreboard', (req, res) => {
             });
         });
     }
-    
-    res.render('admin-scoreboard', { 
-        contests, 
-        selectedContest, 
-        usersData 
+
+    res.render('admin-scoreboard', {
+        contests,
+        selectedContest,
+        usersData
     });
 });
 
 // ==========================================
-// სტუდენტების მართვა & წაშლა
+// 👥 სტუდენტების მართვა
 // ==========================================
-app.get('/admin/register-student', (req, res) => {
-    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
-    
-    const students = readData('students.json', [{ email: 'student@gmail.com', password: '123', username: 'ტესტ სტუდენტი' }]);
-    
-    // თუ url-ში გვექნება success პარამეტრი, გადმოვაყოლებთ EJS-ს
+app.get('/admin/register-student', async (req, res) => {
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') {
+        return res.status(403).send('წვდომა უარყოფილია');
+    }
+    const students = await Student.find().lean();
     const successMessage = req.query.success || null;
     res.render('register-student', { students, success: successMessage });
 });
 
-app.post('/admin/register-student', (req, res) => {
-    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
-    
-    // EJS ფორმიდან ახლა უკვე მოდის 'username'
-    const { email, password = "", username = "" } = req.body;
-    const students = readData('students.json', [{ email: 'student@gmail.com', password: '123', username: 'ტესტ სტუდენტი' }]);
-    
-    // თუ ელ-ფოსტა უკვე არსებობს
-    if (students.some(s => s.email === email)) {
+app.post('/admin/register-student', async (req, res) => {
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') {
+        return res.status(403).send('წვდომა უარყოფილია');
+    }
+
+    const { email, password = '', username = '' } = req.body;
+    const exists = await Student.findOne({ email: email.trim() });
+
+    if (exists) {
+        const students = await Student.find().lean();
         return res.render('register-student', { students, success: 'ეს მეილი გამოყენებულია!' });
     }
-    
-    if (email && password) { 
-        students.push({ 
-            id: Date.now().toString(), 
-            username: username.trim() || 'სტუდენტი', // აქ ინახება სახელი და გვარი
-            email: email.trim(), 
-            password: password.trim() 
-        }); 
-        writeData('students.json', students); 
+
+    if (email && password) {
+        await Student.create({
+            id: Date.now().toString(),
+            username: username.trim() || 'სტუდენტი',
+            email: email.trim(),
+            password: password.trim()
+        });
     }
-    
-    // გადამისამართება წარმატების შეტყობინებით
+
     res.redirect('/admin/register-student?success=' + encodeURIComponent('მოსწავლე წარმატებით დარეგისტრირდა!'));
 });
 
-app.post('/admin/unregister-student', (req, res) => {
-    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
-    
-    const targetId = req.body.id || req.body.studentId; 
-    let students = readData('students.json', [{ email: 'student@gmail.com', password: '123', username: 'ტესტ სტუდენტი' }]);
-    
-    students = students.filter(s => String(s.id) !== String(targetId) && String(s._id) !== String(targetId));
-    writeData('students.json', students);
-    
+app.post('/admin/unregister-student', async (req, res) => {
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') {
+        return res.status(403).send('წვდომა უარყოფილია');
+    }
+    const targetId = req.body.id || req.body.studentId;
+    await Student.deleteOne({ id: targetId });
     res.redirect('/admin/register-student?success=' + encodeURIComponent('მოსწავლის რეგისტრაცია გაუქმებულია.'));
 });
+
 // ==========================================
-// კომუნიკაცია (Questions სრულად შესაბამისი EJS-თან)
+// 💬 კომუნიკაცია
 // ==========================================
-app.get('/communication', (req, res) => {
+app.get('/communication', async (req, res) => {
     if (!req.session.userId) return res.redirect('/');
-    
-    const contestId = req.query.contestId || '';
-    const userRole = req.session.role || 'user';
-    const contests = readData('contests.json');
-    
-    let contestTitle = "";
-    let tasks = [];
-    
+
+    const contestId  = req.query.contestId || '';
+    const userRole   = req.session.role || 'user';
+    const allContests = await Contest.find().lean();
+
+    let contestTitle = '';
+    let tasks        = [];
+
     if (contestId) {
-        const currentContest = contests.find(c => String(c.id) === String(contestId));
+        const currentContest = allContests.find(c => String(c.id) === String(contestId));
         if (currentContest) {
             contestTitle = currentContest.title;
-            tasks = currentContest.tasks || [];
+            tasks        = currentContest.tasks || [];
         }
     }
 
-    const allQuestions = readData('questions.json');
     let messages = [];
-    
+
     if (userRole === 'admin' || userRole === 'owner') {
+        const allQuestions = await Question.find().lean();
         messages = allQuestions.map(q => {
-            const cMatch = contests.find(c => String(c.id) === String(q.contestId));
-            return { ...q, contestTitle: cMatch ? cMatch.title : "Unknown Contest" };
+            const cMatch = allContests.find(c => String(c.id) === String(q.contestId));
+            return { ...q, contestTitle: cMatch ? cMatch.title : 'Unknown Contest' };
         });
     } else {
         if (contestId) {
-            messages = allQuestions.filter(q => String(q.contestId) === String(contestId) && q.userEmail === req.session.userEmail);
+            messages = await Question.find({
+                contestId: contestId,
+                userEmail: req.session.userEmail
+            }).lean();
         }
     }
-    
-    res.render('communication', { 
-        messages, 
-        role: userRole, 
-        contestId, 
-        contestTitle, 
-        tasks 
+
+    res.render('communication', {
+        messages,
+        role: userRole,
+        contestId,
+        contestTitle,
+        tasks
     });
 });
 
-app.post('/communication/ask', (req, res) => {
+app.post('/communication/ask', async (req, res) => {
     if (!req.session.userId) return res.redirect('/');
+
     const { taskName, question, contestId } = req.body;
-    
+
     if (question) {
-        const allQuestions = readData('questions.json');
-        allQuestions.push({ 
-            id: Date.now().toString(), 
+        await Question.create({
+            id: Date.now().toString(),
             contestId: String(contestId),
-            userEmail: req.session.userEmail, 
-            taskName: taskName || 'General', 
-            question: question.trim(), 
-            answer: '', 
+            userEmail: req.session.userEmail,
+            taskName: taskName || 'General',
+            question: question.trim(),
+            answer: '',
             time: new Date().toLocaleTimeString('ka-GE', { hour: '2-digit', minute: '2-digit' })
         });
-        writeData('questions.json', allQuestions);
     }
+
     res.redirect(`/communication?contestId=${contestId}`);
 });
 
-app.post('/communication/reply', (req, res) => {
-    if (req.session.role !== 'admin' && req.session.role !== 'owner') return res.status(403).send('წვდომა უარყოფილია');
-    const { messageId, answer, redirectUrl } = req.body;
-    
-    const allQuestions = readData('questions.json');
-    const question = allQuestions.find(q => String(q.id) === String(messageId));
-    
-    if (question && answer) { 
-        question.answer = answer.trim(); 
-        writeData('questions.json', allQuestions); 
+app.post('/communication/reply', async (req, res) => {
+    if (req.session.role !== 'admin' && req.session.role !== 'owner') {
+        return res.status(403).send('წვდომა უარყოფილია');
     }
+
+    const { messageId, answer, redirectUrl } = req.body;
+
+    if (answer) {
+        await Question.findOneAndUpdate(
+            { id: messageId },
+            { answer: answer.trim() }
+        );
+    }
+
     res.redirect(redirectUrl || '/communication');
 });
-// სერვერის გაშვება
-const PORT = 3000;
+
+// ==========================================
+// 🚀 სერვერის გაშვება
+// ==========================================
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 სერვერი წარმატებით გადაეშვა სრულ რეჟიმში!`);
+    console.log(`🚀 სერვერი წარმატებით გაეშვა!`);
     console.log(`🔗 გახსენი ბრაუზერში: http://localhost:${PORT}`);
 });

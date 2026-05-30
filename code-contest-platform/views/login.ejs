@@ -1,33 +1,170 @@
 <!DOCTYPE html>
 <html lang="ka">
 <head>
-    <meta charset="UTF-8">
-    <title>Login - cms.zarzma1.ge</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background-color: #f4f6f9; font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .login-box { background: white; padding: 35px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 400px; border-top: 4px solid #0d6efd; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Zarzma Judge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/public/style.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: var(--bg);
+      background-image: radial-gradient(ellipse at 60% 20%, rgba(91,110,245,0.07) 0%, transparent 60%);
+    }
+
+    .login-wrap {
+      width: 100%;
+      max-width: 380px;
+      padding: 24px;
+    }
+
+    .login-logo {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    .login-logo-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: var(--accent-glow);
+      border: 1px solid rgba(91,110,245,0.3);
+      margin-bottom: 14px;
+    }
+
+    .login-logo-dot-lg {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 16px var(--accent);
+    }
+
+    .login-title {
+      font-family: var(--font-mono);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.3px;
+    }
+
+    .login-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .login-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 28px;
+    }
+
+    .error-box {
+      background: var(--red-bg);
+      border: 1px solid rgba(239,68,68,0.2);
+      border-radius: var(--radius-md);
+      color: var(--red);
+      font-size: 13px;
+      padding: 10px 14px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .form-label-zj {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .input-zj {
+      width: 100%;
+      padding: 10px 13px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-mid);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      font-size: 14px;
+      outline: none;
+      transition: 150ms ease;
+      margin-bottom: 16px;
+    }
+    .input-zj:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .input-zj::placeholder { color: var(--text-muted); }
+
+    .btn-login {
+      width: 100%;
+      padding: 11px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-md);
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: 150ms ease;
+      margin-top: 4px;
+      letter-spacing: 0.2px;
+    }
+    .btn-login:hover { background: var(--accent-hover); }
+
+    .login-footer {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+  </style>
 </head>
 <body>
-    <div class="login-box">
-        <h3 class="text-center mb-4 fw-bold text-dark">cms.zarzma1.ge</h3>
-        
-        <% if (error) { %>
-            <div class="alert alert-danger py-2 small text-center"><%= error %></div>
-        <% } %>
 
-        <form action="/login" method="POST">
-            <div class="mb-3">
-                <label class="form-label small fw-bold text-secondary">EMAIL ADDRESS</label>
-                <input type="email" name="email" class="form-control text-muted" placeholder="example@gmail.com" required>
-            </div>
-            <div class="mb-4">
-                <label class="form-label small fw-bold text-secondary">PASSWORD</label>
-                <input type="password" name="password" class="form-control text-muted" placeholder="••••••••" required>
-            </div>
-            <button type="submit" class="btn btn-primary w-100 fw-bold py-2">Login</button>
-        </form>
+  <div class="login-wrap">
+    <div class="login-logo">
+      <div style="display:flex;justify-content:center;margin-bottom:12px;">
+        <div class="login-logo-mark">
+          <div class="login-logo-dot-lg"></div>
+        </div>
+      </div>
+      <div class="login-title">Zarzma Judge</div>
+      <div class="login-sub">cms.zarzma1.ge</div>
     </div>
+
+    <div class="login-card">
+      <% if (error) { %>
+        <div class="error-box"><%= error %></div>
+      <% } %>
+
+      <form action="/login" method="POST">
+        <label class="form-label-zj">Email</label>
+        <input type="email" name="email" class="input-zj" placeholder="example@gmail.com" required autocomplete="email">
+
+        <label class="form-label-zj">პაროლი</label>
+        <input type="password" name="password" class="input-zj" placeholder="••••••••" required>
+
+        <button type="submit" class="btn-login">შესვლა</button>
+      </form>
+    </div>
+
+    <div class="login-footer">Zarzma Code Judge Platform · C++ Testing</div>
+  </div>
+
 </body>
 </html>
