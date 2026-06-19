@@ -12,8 +12,7 @@ const MongoStore = require('connect-mongo').default || require('connect-mongo');
 // 🔗 MongoDB კავშირი
 // ⚠️ YOUR_PASSWORD-ის ნაცვლად ჩასვი შენი პაროლი
 // ==========================================
-const MONGO_URI = 'mongodb+srv://zarzma:zarzma777@cluster0.8xbmxry.mongodb.net/zarzma_judge?retryWrites=true&w=majority&appName=Cluster0';
-
+const MONGO_URI = 'mongodb://zarzma:zarzma777@ac-vpoc0pt-shard-00-00.8xbmxry.mongodb.net:27017,ac-vpoc0pt-shard-00-01.8xbmxry.mongodb.net:27017,ac-vpoc0pt-shard-00-02.8xbmxry.mongodb.net:27017/zarzma_judge?ssl=true&replicaSet=atlas-r99uc1-shard-0&authSource=admin&appName=Cluster0';
 mongoose.connect(MONGO_URI)
     .then(() => console.log('✅ MongoDB Atlas-თან კავშირი დამყარდა!'))
     .catch(err => console.error('❌ MongoDB შეცდომა:', err));
